@@ -11,7 +11,7 @@ export const siteConfig = {
   // 所在地・アクセスページ用
   addressJa: "275-8575　千葉県習志野市泉町1-2-1 津田沼キャンパス 31号館 3階 314-316号室",
   // GitHubリポジトリ (Sveltia CMSの設定や「編集を提案」リンクなどで使う)
-  githubRepo: "ciko23008/Nomura-laboratory",
+  githubRepo: "JuniaNomura/Nomura-laboratory",
   githubBranch: "main",
 } as const;
 

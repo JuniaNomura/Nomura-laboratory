@@ -21,7 +21,7 @@
 backend:
   name: github
   # 実際のGitHubリポジトリ名に書き換えてください (owner/repo の形式)
-  repo: ciko23008/Nomura-laboratory
+  repo: JuniaNomura/Nomura-laboratory
   branch: main
 
 # 空の任意項目を出力ファイルに残さない

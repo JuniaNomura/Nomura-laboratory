@@ -7,7 +7,7 @@ import sitemap from "@astrojs/sitemap";
 //   base: GitHub Pagesでリポジトリ名がURLに入る場合は "/リポジトリ名" を指定
 //         (例: your-org.github.io/lab-site/ で公開するなら base: "/lab-site")
 //         独自ドメインや <org>.github.io リポジトリで公開する場合は "/" のままでよい
-const SITE_URL = "https://ciko23008.github.io";
+const SITE_URL = "https://JuniaNomura.github.io"";
 const BASE_PATH = "/Nomura-laboratory";
 
 export default defineConfig({
