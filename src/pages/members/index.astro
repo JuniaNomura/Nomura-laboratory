@@ -1,0 +1,57 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection, type CollectionEntry } from "astro:content";
+import { withBase } from "../../utils/url";
+
+const allMembers = await getCollection("members");
+
+type Member = CollectionEntry<"members">;
+const byOrder = (a: Member, b: Member) => a.data.order - b.data.order;
+
+const faculty = allMembers
+  .filter((m) => !m.data.graduated && (m.data.role === "faculty" || m.data.role === "staff"))
+  .sort(byOrder);
+const students = allMembers
+  .filter((m) => !m.data.graduated && m.data.role === "student")
+  .sort(byOrder);
+const alumni = allMembers.filter((m) => m.data.graduated).sort(byOrder);
+
+const groups = [
+  { label: "教員", members: faculty },
+  { label: "学生", members: students },
+  { label: "卒業生・修了生", members: alumni },
+].filter((g) => g.members.length > 0);
+---
+
+<BaseLayout title="メンバー" description="研究室に在籍するメンバーの紹介です。">
+  <h1>メンバー</h1>
+
+  {
+    groups.map((group) => (
+      <section>
+        <h2>{group.label}</h2>
+        <ul class="member-grid">
+          {group.members.map((member) => (
+            <li class="member-card">
+              {member.data.photo && (
+                <img class="member-card__photo" src={withBase(member.data.photo)} alt={member.data.nameJa} />
+              )}
+              <p class="member-card__name">
+                {member.data.nameJa}
+                {member.data.grade && ` (${member.data.grade})`}
+              </p>
+              {member.data.positionJa && <p class="member-card__role">{member.data.positionJa}</p>}
+              {member.data.permalink && (
+                <p>
+                  <a href={`https://researchmap.jp/${member.data.permalink}`} target="_blank" rel="noopener">
+                    researchmap
+                  </a>
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))
+  }
+</BaseLayout>

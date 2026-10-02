@@ -1,0 +1,13 @@
+# 表示イメージ確認用のサンプルです。実データが入ったら削除してください。
+titleJa: "(サンプル) センサ信号処理に関する研究"
+titleEn: "(Sample) A Study on Sensor Signal Processing"
+authors:
+  - "山田 太郎"
+  - "鈴木 花子"
+journal: "○○学会論文誌"
+publicationDate: "2026-03"
+year: 2026
+doi: ""
+achievementType: "published_papers"
+ownerPermalink: "example_permalink"
+sourceId: "sample-001"

@@ -1,0 +1,28 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { siteConfig } from "../config/site";
+---
+
+<BaseLayout title="アクセス" description="研究室の所在地・連絡先の案内です。">
+  <h1>アクセス</h1>
+
+  <section>
+    <h2>所在地</h2>
+    <p>{siteConfig.addressJa}</p>
+  </section>
+
+  <section>
+    <h2>連絡先</h2>
+    <p>
+      <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>
+    </p>
+  </section>
+
+  <section>
+    <h2>交通案内</h2>
+    <p>
+      最寄り駅からの経路や地図はここに記載します。地図を埋め込む場合は、
+      外部サービスの埋め込みコードをこのページに追加してください。
+    </p>
+  </section>
+</BaseLayout>

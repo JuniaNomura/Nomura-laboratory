@@ -1,0 +1,93 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+
+const rawPublications = await getCollection("publications");
+
+function extractYear(pub: (typeof rawPublications)[number]): number {
+  if (pub.data.year) return pub.data.year;
+  const match = pub.data.publicationDate?.match(/^(\d{4})/);
+  return match ? Number(match[1]) : 0;
+}
+
+const publications = rawPublications
+  .map((pub) => ({ ...pub, year: extractYear(pub) }))
+  .sort((a, b) => {
+    if (b.year !== a.year) return b.year - a.year;
+    return (b.data.publicationDate ?? "").localeCompare(a.data.publicationDate ?? "");
+  });
+
+const totalCount = publications.length;
+---
+
+<BaseLayout title="業績" description="研究室メンバーの業績一覧です。researchmapのデータをもとに自動生成しています。">
+  <h1>業績</h1>
+  <p class="page-lead">
+    全 {totalCount} 件。researchmapに登録された情報をもとに自動生成しています(手動での追加・編集は行っていません)。
+  </p>
+
+  {
+    totalCount === 0 ? (
+      <p>
+        まだ業績データがありません。<code>npm run fetch:researchmap</code>{" "}
+        を実行するか、GitHub Actionsのワークフローを一度走らせてください。
+      </p>
+    ) : (
+      <>
+        <div class="pub-filter">
+          <input
+            type="search"
+            id="pub-search"
+            placeholder="タイトル・著者名で絞り込み"
+            aria-label="業績を検索"
+          />
+        </div>
+
+        <ul class="pub-list" id="pub-list">
+          {publications.map((pub) => {
+            const title = pub.data.titleJa ?? pub.data.titleEn ?? "(無題)";
+            const searchText = [title, pub.data.titleEn, ...pub.data.authors, pub.data.journal]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+            return (
+              <li data-search={searchText}>
+                <span class="pub-year">{pub.year || "—"}</span>
+                <strong>{title}</strong>
+                {pub.data.authors.length > 0 && <span> / {pub.data.authors.join(", ")}</span>}
+                {pub.data.journal && <span> / {pub.data.journal}</span>}
+                {pub.data.doi && (
+                  <span>
+                    {" "}
+                    /{" "}
+                    <a href={`https://doi.org/${pub.data.doi}`} target="_blank" rel="noopener">
+                      DOI
+                    </a>
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </>
+    )
+  }
+</BaseLayout>
+
+<script>
+  // フレームワークを使わない、最小限の絞り込みスクリプト。
+  // 通信は発生せず、すでに描画済みのDOMの表示・非表示を切り替えるだけ。
+  const input = document.getElementById("pub-search") as HTMLInputElement | null;
+  const list = document.getElementById("pub-list");
+
+  if (input && list) {
+    const items = Array.from(list.children) as HTMLElement[];
+    input.addEventListener("input", () => {
+      const query = input.value.trim().toLowerCase();
+      for (const item of items) {
+        const haystack = item.dataset.search ?? "";
+        item.hidden = query.length > 0 && !haystack.includes(query);
+      }
+    });
+  }
+</script>

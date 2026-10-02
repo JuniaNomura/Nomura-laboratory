@@ -1,0 +1,16 @@
+---
+import { siteConfig } from "../config/site";
+
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <p>
+      &copy; {year} {siteConfig.labNameJa}, {siteConfig.universityJa}
+    </p>
+    <p>
+      お問い合わせ: <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>
+    </p>
+  </div>
+</footer>

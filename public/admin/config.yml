@@ -1,0 +1,91 @@
+# Sveltia CMS の設定ファイル。
+# 詳細: https://sveltiacms.app/en/docs/start
+#
+# --- 認証方法について ---
+# backendをこのままにすると「Sign In with Token」でのログインになります。
+# 各編集者(学生・教員)が、このリポジトリへの書き込み権限を持つ
+# GitHubアカウントで Personal Access Token (repo権限) を発行し、
+# 管理画面でそれを貼り付けてログインします。追加のサーバは一切不要です。
+#
+# 「GitHubアカウントでログイン」ボタンのような、より手軽な体験にしたい場合は
+# Sveltia CMS Authenticator (Cloudflare Workersで動く無料の中継)を使えます。
+# 常時稼働のサーバではなく、一度デプロイすれば管理不要です。
+#   https://github.com/sveltia/sveltia-cms-auth
+# 導入する場合は、backend に base_url を追加してください。
+#   backend:
+#     name: github
+#     repo: your-org/lab-site
+#     branch: main
+#     base_url: https://xxxx.workers.dev
+
+backend:
+  name: github
+  # 実際のGitHubリポジトリ名に書き換えてください (owner/repo の形式)
+  repo: ciko23008/Nomura-laboratory
+  branch: main
+
+# 空の任意項目を出力ファイルに残さない
+output:
+  omit_empty_optional_fields: true
+
+# アップロード画像の保存先。Astroの public/ 以下なのでビルド時の加工なしにそのまま配信される
+media_folder: "public/uploads"
+public_folder: "/uploads"
+
+locale: ja
+
+collections:
+  - name: news
+    label: "ニュース"
+    label_singular: "記事"
+    folder: "src/content/news"
+    create: true
+    delete: true
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    extension: md
+    format: frontmatter
+    fields:
+      - { label: "タイトル", name: title, widget: string }
+      - label: "日付"
+        name: date
+        widget: datetime
+        format: "YYYY-MM-DD"
+        date_format: "YYYY-MM-DD"
+        time_format: false
+      - { label: "概要(一覧に表示される短い説明)", name: excerpt, widget: text, required: false }
+      - { label: "執筆者", name: author, widget: string, required: false }
+      - { label: "タグ", name: tags, widget: list, required: false, default: [] }
+      - { label: "下書き(チェックすると公開されない)", name: draft, widget: boolean, default: false }
+      - { label: "本文", name: body, widget: markdown }
+
+  - name: members
+    label: "メンバー"
+    label_singular: "メンバー"
+    folder: "src/content/members"
+    create: true
+    delete: true
+    identifier_field: nameJa
+    extension: yaml
+    format: yaml
+    fields:
+      - { label: "氏名(日本語)", name: nameJa, widget: string }
+      - { label: "氏名(英語)", name: nameEn, widget: string, required: false }
+      - label: "区分"
+        name: role
+        widget: select
+        options:
+          - { label: "教員", value: faculty }
+          - { label: "職員・研究員", value: staff }
+          - { label: "学生", value: student }
+          - { label: "卒業生・修了生", value: alumni }
+      - { label: "学年など (例: M2, B4)", name: grade, widget: string, required: false }
+      - { label: "職名 (例: 教授)", name: positionJa, widget: string, required: false }
+      - label: "researchmap permalink"
+        name: permalink
+        widget: string
+        required: false
+        hint: "https://researchmap.jp/(この部分) 。設定すると業績が自動で取得されます"
+      - { label: "写真", name: photo, widget: image, required: false }
+      - { label: "メールアドレス", name: email, widget: string, required: false }
+      - { label: "卒業・修了済み", name: graduated, widget: boolean, default: false }
+      - { label: "表示順(小さいほど上に表示)", name: order, widget: number, default: 100, value_type: int }

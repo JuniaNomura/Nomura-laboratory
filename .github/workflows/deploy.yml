@@ -1,0 +1,84 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 毎日 21:00 UTC (日本時間 6:00) に researchmap の業績を同期する
+    - cron: "0 21 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# 同時に複数のデプロイが走らないようにする
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # researchmapから業績を取得し、差分があればmainブランチへコミットする。
+  # 手動実行・定期実行のときだけ動かす(通常のpushでは何もしない)。
+  sync-researchmap:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run fetch:researchmap
+
+      - name: 差分があればコミット・push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/content/publications
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: researchmapから業績を同期"
+            git push
+          else
+            echo "業績に変更はありませんでした。"
+          fi
+
+  # サイトをビルドする。researchmap同期が失敗しても、記事等の更新は
+  # 反映できるようにビルド自体は続行する(cancelled のときだけスキップ)。
+  build:
+    needs: [sync-researchmap]
+    if: always() && needs.sync-researchmap.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

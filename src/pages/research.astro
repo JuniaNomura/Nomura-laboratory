@@ -1,0 +1,36 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+
+// このページは静的なテキストです。研究内容が変わったときは
+// 直接このファイルを編集してください(頻繁には更新しない想定)。
+const researchAreas = [
+  {
+    title: "研究テーマ1",
+    body: "研究テーマの概要をここに記載します。対象、アプローチ、応用先などを2〜4文程度で説明します。",
+  },
+  {
+    title: "研究テーマ2",
+    body: "研究テーマの概要をここに記載します。対象、アプローチ、応用先などを2〜4文程度で説明します。",
+  },
+  {
+    title: "研究テーマ3",
+    body: "研究テーマの概要をここに記載します。対象、アプローチ、応用先などを2〜4文程度で説明します。",
+  },
+];
+---
+
+<BaseLayout title="研究内容" description="研究室の研究テーマの紹介です。">
+  <h1>研究内容</h1>
+  <p class="page-lead">
+    研究室全体の研究方針や背景をここに記載します。
+  </p>
+
+  {
+    researchAreas.map((area) => (
+      <section>
+        <h2>{area.title}</h2>
+        <p>{area.body}</p>
+      </section>
+    ))
+  }
+</BaseLayout>

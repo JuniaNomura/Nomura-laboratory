@@ -1,0 +1,29 @@
+---
+import { siteConfig, navItems } from "../config/site";
+import { withBase } from "../utils/url";
+
+const currentPath = Astro.url.pathname;
+const links = navItems.map((item) => ({ ...item, href: withBase(item.href) }));
+---
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="site-title" href={withBase("/")}>
+      {siteConfig.labNameJa}
+      <small>{siteConfig.universityJa} {siteConfig.departmentJa}</small>
+    </a>
+    <nav aria-label="サイト内ナビゲーション">
+      <ul class="site-nav">
+        {
+          links.map((item) => (
+            <li>
+              <a href={item.href} aria-current={currentPath === item.href ? "page" : undefined}>
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+</header>

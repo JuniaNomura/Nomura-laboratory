@@ -1,0 +1,42 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+import { siteConfig } from "../config/site";
+import { withBase } from "../utils/url";
+
+const news = (await getCollection("news", ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .slice(0, 5);
+
+const formatDate = (d: Date) =>
+  d.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
+---
+
+<BaseLayout title={siteConfig.labNameJa}>
+  <section>
+    <h1>{siteConfig.labNameJa}</h1>
+    <p class="page-lead">{siteConfig.descriptionJa}</p>
+  </section>
+
+  <section>
+    <h2>お知らせ</h2>
+    {
+      news.length === 0 ? (
+        <p>お知らせはまだありません。</p>
+      ) : (
+        <ul class="card-list">
+          {news.map((post) => (
+            <li class="card">
+              <p class="card__meta">{formatDate(post.data.date)}</p>
+              <h3 class="card__title">
+                <a href={withBase(`/news/${post.id}/`)}>{post.data.title}</a>
+              </h3>
+              {post.data.excerpt && <p>{post.data.excerpt}</p>}
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    <p><a href={withBase("/news/")}>お知らせ一覧を見る →</a></p>
+  </section>
+</BaseLayout>

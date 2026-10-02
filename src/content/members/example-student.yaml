@@ -1,0 +1,132 @@
+nameJa: "K. M" //水原　啓介　//NOT shown
+nameEn: "K. M"
+role: student
+grade: "M2" //"B4(2024.4-2025.3)   ->  Master(2025.4-2027.3)   ->  NOT shown"
+permalink: "M2"
+order: 10
+
+nameJa: "K. H." //平澤　航生　//モード同期レーザー
+nameEn: "K. H."
+role: student
+grade: "M2" //"B4(2024.4-2025.3)   ->  Master(2025.4-2027.3)   ->  System engineer" // NTT テクノクロス
+permalink: ""
+order: 11
+
+nameJa: "M. T." //誘導ブリルアンレーザー
+nameEn: "M. T." 
+role: student
+grade: "M1" //"B4(2025.4-2026.3)   ->  Master(2026.4-2028.3)   ->  " // 
+permalink: ""
+order: 12
+
+nameJa: "K. N." //モード同期レーザー
+nameEn: "K. N."
+role: student
+grade: "M1" //"B4(2025.4-2026.3)
+permalink: ""
+order: 13
+
+nameJa: "K. A." //誘導ブリルアンレーザー
+nameEn: "K. A."
+role: student
+grade: "B4" //"B4(2026.4-2027.3) //フューチャーテクノ
+permalink: ""
+order: 1011
+
+nameJa: "K. I." //モード同期レーザー
+nameEn: "K. I."
+role: student
+grade: "B4" //"B4(2026.4-2027.3) //
+permalink: ""
+order: 1011
+
+nameJa: "K. I." //オプトエレクトロニクス
+nameEn: "K. I."
+role: student
+grade: "B4" //"B4(2026.4-2027.3) //
+permalink: ""
+order: 1011
+
+nameJa: "K. S." //誘導ブリルアンレーザー//第二種電気工事士//学科HP等掲載学生 //
+nameEn: "K. S."
+role: student
+grade: "B4" //"B4(2026.4-2027.3) //京三製作所
+permalink: ""
+order: 1011
+
+nameJa: "H. T." //誘導ブリルアンレーザー//第一級陸上特殊無線技士//学科HP等掲載学生 //
+nameEn: "H. T."
+role: student
+grade: "B4" //"B4(2026.4-2027.3)   ->  Master(2027.4-2029.3)   ->  " // 
+permalink: ""
+order: 14
+
+nameJa: "H. T." //モード同期レーザー
+nameEn: "H. T."
+role: student
+grade: "B4" //"B4(2026.4-2027.3) //池上通信機株式会社
+permalink: ""
+order: 16
+
+nameJa: "E. M." //誘導ブリルアンレーザー
+nameEn: "E. M."
+role: student
+grade: "B4" //"B4(2026.4-2027.3) //JRC特機株式会社
+permalink: ""
+order: 1011
+
+nameJa: "H. S. さん" //佐藤　日向　//誘導ブリルアンレーザー
+nameEn: "H. S. -san"
+role: alumni
+grade: "B4(2025.4-2026.3)  -> Engineer" //東鉄工業株式会社
+permalink: ""
+order: 9992
+
+nameJa: "R. S. さん" //篠﨑　良太　//誘導ブリルアンレーザー
+nameEn: "R. S. -san"
+role: alumni
+grade: "B4(2025.4-2026.3) -> Engineer" //株式会社マーブル
+permalink: ""
+order: 9993
+
+nameJa: "E. N. さん" //那須　英一郎　//モード同期レーザー
+nameEn: "E. N. -san"
+role: alumni
+grade: "B4(2025.4-2026.3) -> Field engineer" //株式会社 安藤 間
+permalink: ""
+order: 9994
+
+nameJa: "T. N. さん" //西川　利治 //オプトエレクトロニクス
+nameEn: "T. N. -san" 
+role: alumni 
+grade: "B4(2025.4-2026.9) -> Engineer" //株式会社あいはら
+permalink: ""
+order: 9995
+
+nameJa: "H. M. さん" //松村　春輝　//モード同期レーザー
+nameEn: "H. M. -san"
+role: alumni
+grade: "B4(2025.4-2026.3) -> NOT shown" //公務員浪人 -> 不明
+permalink: ""
+order: 9996
+
+nameJa: "N. O. さん" //岡部　希菜　//ファイバー干渉計 //学部HP掲載学生 // https://www.cit.nihon-u.ac.jp/department/electrical-electronic-engineering/
+nameEn: "N. O. -san"
+role: alumni
+grade: "B4(2024.4-2025.3)   ->  System engineer" //株式会社NSD
+permalink: ""
+order: 9997
+
+nameJa: "K. K. さん" //小原　健太郎　//モード同期レーザー
+nameEn: "K. K. -san"
+role: alumni
+grade: "B4(2024.4-2025.3)  ->  Engineer" //東光高岳
+permalink: ""
+order: 9998
+
+nameJa: "H. S. さん" //鈴木　秀国　//モード同期レーザー
+nameEn: "H. S. -san"
+role: alumni
+grade: "B4(2024.4-2025.3)   ->  System engineer" //テクノプロ
+permalink: ""
+order: 9999
