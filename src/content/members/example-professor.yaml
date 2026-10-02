@@ -1,10 +1,10 @@
 # メンバー1名につき1ファイル。ファイル名は自由(英数字推奨)。
-nameJa: "野邑　寿仁亜"
+nameJa: "野邑 寿仁亜"
 nameEn: "Junia Nomura"
-role: assistant professor
+role: "faculty"
 positionJa: "助教"
 # researchmapのパーマリンク (URLの https://researchmap.jp/ の後ろの部分)。
 # 設定すると、業績の自動取得(scripts/fetch-researchmap.mjs)の対象になる。
 permalink: "nomurajunia"
-email: "nomura.junia(=^・^=), (=^・^=)の部分を@nihon-u.ac.jpに変更してください。"
+email: "nomura.junia@nihon-u.ac.jp" # に変更してください。
 order: 1
