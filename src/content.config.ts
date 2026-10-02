@@ -34,6 +34,18 @@ const members = defineCollection({
     graduated: z.boolean().optional().default(false),
     // メンバー一覧での並び順。小さいほど上に表示
     order: z.number().optional().default(100),
+        // 加入年月 (例: "2024-04")
+    joinDate: z.string().optional(),
+    // 卒業・修了年月 (例: "2026-03")。在籍中は空でよい
+    graduationDate: z.string().optional(),
+    // 資格 (例: ["危険物取扱者乙種4類", "第二種電気工事士"])
+    qualifications: z.array(z.string()).optional().default([]),
+    // 表彰・学科HP掲載などの実績 (例: ["〇〇学会 優秀発表賞 (2025)", "学科HPに掲載 (2025)"])
+    awards: z.array(z.string()).optional().default([]),
+    // 進学先・就職先 (例: "〇〇大学大学院" "〇〇株式会社")。主に卒業生向け
+    afterCareer: z.string().optional(),
+    // 業種 (例: "半導体", "自動車", "電機")。主に卒業生向け
+    industry: z.string().optional(),
   }),
 });
 

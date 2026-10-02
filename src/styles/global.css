@@ -193,7 +193,33 @@ h2 {
   font-size: 0.85rem;
   margin: 0.2rem 0 0;
 }
+.member-card__name-en {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  margin: 0.1rem 0 0;
+}
 
+.member-card__period {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  margin: 0.4rem 0 0;
+}
+
+.member-card__detail {
+  font-size: 0.85rem;
+  margin: 0.3rem 0 0;
+}
+
+.member-card__awards {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.member-card__awards li {
+  margin-bottom: 0.15rem;
+}
 /* 業績一覧 */
 .pub-list {
   list-style: none;

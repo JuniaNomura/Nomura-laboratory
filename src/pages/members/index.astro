@@ -40,6 +40,30 @@ const groups = [
                 {member.data.nameJa}
                 {member.data.grade && ` (${member.data.grade})`}
               </p>
+                            {member.data.nameEn && <p class="member-card__name-en">{member.data.nameEn}</p>}
+                                          {(member.data.joinDate || member.data.graduationDate) && (
+                <p class="member-card__period">
+                  {member.data.joinDate && `${member.data.joinDate} 加入`}
+                  {member.data.joinDate && member.data.graduationDate && " 〜 "}
+                  {member.data.graduationDate && `${member.data.graduationDate} 卒業・修了`}
+                </p>
+              )}
+              {member.data.afterCareer && (
+                <p class="member-card__detail">
+                  進路: {member.data.afterCareer}
+                  {member.data.industry && ` (${member.data.industry})`}
+                </p>
+              )}
+              {member.data.qualifications.length > 0 && (
+                <p class="member-card__detail">資格: {member.data.qualifications.join("、")}</p>
+              )}
+              {member.data.awards.length > 0 && (
+                <ul class="member-card__awards">
+                  {member.data.awards.map((award) => (
+                    <li>{award}</li>
+                  ))}
+                </ul>
+              )}
               {member.data.positionJa && <p class="member-card__role">{member.data.positionJa}</p>}
               {member.data.permalink && (
                 <p>
