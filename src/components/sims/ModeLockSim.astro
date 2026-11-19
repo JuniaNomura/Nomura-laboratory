@@ -1,0 +1,168 @@
+---
+// モード同期シミュレーター(研究内容「モード同期レーザー(光周波数コム)」用)。
+// 研究テーマの frontmatter に simulator: "modelock" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="modelock">
+  <p class="sim__title">モード同期シミュレーター: 波を重ねると、パルスになる</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>重ねる光(モード)の数 N: <output data-role="n-out">8</output> 本</span>
+      <input data-role="n" type="range" min="1" max="40" step="1" value="8" />
+    </label>
+    <label class="sim__field">
+      <span>位相のばらつき: <output data-role="spread-out">100</output> %</span>
+      <input data-role="spread" type="range" min="0" max="100" step="1" value="100" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="lock">位相をそろえる(モード同期)</button>
+    <button type="button" data-role="shuffle">位相をふり直す</button>
+  </div>
+
+  <canvas data-role="canvas" width="900" height="320" role="img" aria-label="上に周波数軸で見た光の成分、下に時間軸で見た光の強さ"
+  ></canvas>
+  <p class="sim__caption">
+    上は、周波数の軸で見た光です。レーザーの中では、等しい間隔で並んだ、周波数の少しずつ違う光(モード)が、同時に発振しています。この「くし」のような並びが、光周波数コムです。下は、それらをすべて重ねたときの、光の強さの時間変化です(光がレーザーの中を3周する時間ぶん)。縦軸は、平均の強さを1としています。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  const setup = (root: HTMLElement) => {
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const nIn = q<HTMLInputElement>("n");
+    const spreadIn = q<HTMLInputElement>("spread");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+    const MAX_N = 40;
+
+    // 各モードの位相のもと(-π〜π のでたらめな値)。「位相のばらつき」を掛けて使う
+    let seeds: number[] = [];
+    const shuffle = () => {
+      seeds = Array.from({ length: MAX_N }, () => (Math.random() * 2 - 1) * Math.PI);
+    };
+    shuffle();
+
+    const draw = () => {
+      const n = Number(nIn.value);
+      const spread = Number(spreadIn.value) / 100;
+      q<HTMLOutputElement>("n-out").value = String(n);
+      q<HTMLOutputElement>("spread-out").value = spreadIn.value;
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "13px sans-serif";
+
+      // --- 上: 周波数軸(くし) ---
+      const left = 60;
+      const right = W - 20;
+      const combBase = 78;
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left, combBase + 0.5);
+      ctx.lineTo(right, combBase + 0.5);
+      ctx.stroke();
+      const gap = (right - left) / (MAX_N + 1);
+      const first = Math.floor((MAX_N - n) / 2);
+      for (let k = 0; k < MAX_N; k++) {
+        const x = left + (k + 1) * gap;
+        const on = k >= first && k < first + n;
+        ctx.strokeStyle = on ? "#ffd84d" : "#2a2a34";
+        ctx.lineWidth = on ? 3 : 1;
+        ctx.beginPath();
+        ctx.moveTo(x, combBase);
+        ctx.lineTo(x, on ? 28 : combBase - 8);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText("周波数 →(となり合う線の間隔 = くり返し周波数)", left, 16);
+
+      // --- 下: 時間軸での強さ ---
+      const gt = 118;
+      const gb = H - 40;
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left + 0.5, gt + 0.5, right - left, gb - gt);
+      const points = right - left;
+      const values = new Float64Array(points + 1);
+      let peak = 0;
+      for (let i = 0; i <= points; i++) {
+        const t = (i / points) * 3 - 0.5; // 周回時間を1とした時刻(-0.5〜2.5)
+        let re = 0;
+        let im = 0;
+        for (let k = 0; k < n; k++) {
+          const ph = 2 * Math.PI * k * t + seeds[k] * spread;
+          re += Math.cos(ph);
+          im += Math.sin(ph);
+        }
+        const v = (re * re + im * im) / n; // 平均の強さを1とした値
+        values[i] = v;
+        if (v > peak) peak = v;
+      }
+      const full = Math.max(4, n) * 1.08;
+      ctx.strokeStyle = "#ff6a4d";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= points; i++) {
+        const y = gb - (values[i] / full) * (gb - gt);
+        if (i === 0) ctx.moveTo(left + i, y);
+        else ctx.lineTo(left + i, y);
+      }
+      ctx.stroke();
+      // 平均の強さ(=1)の線
+      const yAvg = gb - (1 / full) * (gb - gt);
+      ctx.strokeStyle = "#6fb7ff";
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left, yAvg);
+      ctx.lineTo(right, yAvg);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "right";
+      ctx.fillText("平均", left - 6, yAvg + 4);
+      ctx.fillText(`${Math.max(4, n)}倍`, left - 6, gb - (Math.max(4, n) / full) * (gb - gt) + 4);
+      ctx.textAlign = "center";
+      ctx.fillText("時間 →(光がレーザーの中を3周する時間)", (left + right) / 2, H - 14);
+
+      // 実際のレーザーに当てはめた数値(くり返し周波数 100 MHz = 1周 10 ns の場合)
+      const widthPs = (10000 / n).toFixed(0);
+      let state: string;
+      if (n === 1) state = "光が1本だけなので、強さは一定です(連続光)。";
+      else if (peak > 0.9 * n) state = "位相がそろい、鋭いパルスの列になりました(モード同期)。";
+      else if (peak > 0.5 * n) state = "位相がそろいかけて、パルスが現れ始めています。";
+      else state = "位相がばらばらなので、でたらめに揺らぐ光です。";
+      readout.textContent =
+        `いちばん強い瞬間の強さ = 平均の ${peak.toFixed(1)} 倍(位相が完全にそろうと ${n} 倍)。${state}` +
+        (n > 1
+          ? ` 位相がそろったときのパルスの幅は、1周の時間のおよそ 1/${n} です(1周が10 nsのレーザーなら、約 ${widthPs} ps)。`
+          : "");
+    };
+
+    nIn.addEventListener("input", draw);
+    spreadIn.addEventListener("input", draw);
+    q<HTMLButtonElement>("lock").addEventListener("click", () => {
+      spreadIn.value = "0";
+      draw();
+    });
+    q<HTMLButtonElement>("shuffle").addEventListener("click", () => {
+      shuffle();
+      if (spreadIn.value === "0") spreadIn.value = "100";
+      draw();
+    });
+    draw();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="modelock"]').forEach(setup);
+</script>

@@ -1,0 +1,28 @@
+# 研究室紹介の導入文と、研究室が大切にしている言葉。Sveltia CMS(管理画面)からも編集できます。
+# 導入文は、トップページと「研究内容」ページの両方に表示されます(ここを直せば、両方がそろって変わります)。
+
+intro: "「光を創る」「光で測る」「光で操る」の3つの軸で研究を行い、理系人材の育成と科学技術の発展を通して、強靭な社会＊の実現に貢献することを目指しています。"
+
+footnote: "＊強靭性とは、「経済危機や自然災害を含む様々なショックへの耐性及び回復力」を指します(「開発協力大綱」(2015年 閣議決定)による定義)。"
+
+# 研究室の方向性を示す言葉(トップページに表示)
+# quote: 言葉 / translation: 日本語の訳 / author: 言った人・出典 / text: 研究室としての解釈
+# reference と referenceUrl: 参考文献とそのリンク(なくてもよい)
+mottos:
+  - quote: "New instruments make new science."
+    translation: "新しい道具が、新しい科学を生む。"
+    author: "出典不明(物理学者フリーマン・ダイソンも「科学の新しい方向は、新しい概念よりも、新しい道具によって切り開かれることのほうがはるかに多い」と述べています)"
+    text: "ハードウェアかソフトウェアかを問わず、自分たちの手で新しい道具をつくることが、新しい科学を切り開くと信じています。"
+    reference: "参考: A. Krauss, \"New tools drive scientific discovery: evidence from all Nobel-prize and major non-Nobel breakthroughs,\" Humanities and Social Sciences Communications 13, 500 (2026)."
+    referenceUrl: "https://doi.org/10.1057/s41599-026-06865-1"
+  - quote: "Never measure anything but frequency!"
+    translation: "周波数以外は測るな。"
+    author: "アーサー・ショーロー(Arthur L. Schawlow、1981年 ノーベル物理学賞)。弟子のテオドール・ヘンシュが、ノーベル賞講演(2005年)で恩師の教えとして紹介した言葉です。"
+    text: "周波数は、波の振動の回数を数えるだけで、最も精密に測ることができる「物理量の王様」です。長さや電圧など、さまざまな物理量を周波数に置き換えて測ることで、新しい計測技術を確立していきます。"
+    reference: "参考: T. W. Hänsch, \"Nobel Lecture: Passion for precision,\" Reviews of Modern Physics 78, 1297 (2006)."
+    referenceUrl: "https://doi.org/10.1103/RevModPhys.78.1297"
+  - quote: "Curiosity-driven"
+    translation: "好奇心に導かれて。"
+    author: "好奇心にもとづく研究(curiosity-driven research)の大切さを説いた古典に、プリンストン高等研究所の創設者アブラハム・フレクスナーの随筆「役に立たない知識の有用性」(1939年)があります。"
+    text: "ゴールに向かって最短距離を進むだけでなく、時には立ち止まって「なぜだろう？」「こうしたらどうだろう？」を楽しめる研究室でありたいと思います。"
+    reference: "参考: A. Flexner, \"The Usefulness of Useless Knowledge,\" Harper's Magazine 179 (1939)."

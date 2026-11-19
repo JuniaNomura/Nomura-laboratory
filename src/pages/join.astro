@@ -1,0 +1,267 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getCollection, render } from "astro:content";
+import { withBase } from "../utils/url";
+import { loadYaml } from "../utils/data";
+import { isVisible } from "../utils/visibility";
+import { isEmail, isHttpUrl } from "../utils/contact";
+import YearCalendar, { type YearMonth } from "../components/YearCalendar.astro";
+
+interface JoinData {
+  published?: boolean;
+  lead?: string;
+  whatWeDo?: string;
+  year?: YearMonth[];
+  faq?: { q: string; a?: string; guides?: string[]; voices?: { text: string; who?: string }[] }[];
+  contact?: {
+    name?: string;
+    position?: string;
+    email?: string;
+    note?: string;
+    formUrl?: string;
+    formLabel?: string;
+    formNote?: string;
+  };
+}
+
+const join = loadYaml<JoinData>("src/data/join.yaml", {});
+
+// 開発サーバー(npm run dev)では常に内容を表示して確認できる。
+// 公開用のビルドでは、published: true になるまで「準備中」だけを表示する。
+const showContent = import.meta.env.DEV || join.published === true;
+
+// --- 在学生の声 ---
+const voiceEntries = (await getCollection("voices", ({ data }) => !data.draft)).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+const voices = await Promise.all(
+  voiceEntries.map(async (v) => ({ ...v, Content: (await render(v)).Content })),
+);
+
+// --- 詳しい説明ページ(研究室の方針・設備・進路など) ---
+const guides = (await getCollection("guides", ({ data }) => isVisible(data))).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+
+// --- 学生の記事・教員コラムへの案内(公開できる記事があるときだけ表示) ---
+const hasPosts = (await getCollection("posts", ({ data }) => isVisible(data))).length > 0;
+const hasEssays =
+  (await getCollection("columns", ({ data }) => isVisible(data) && data.kind === "essay")).length > 0;
+
+const contact = join.contact ?? {};
+// 見学・相談フォーム(Google フォームなど)のURLが入っているときだけ、ボタンを表示する
+const hasForm = isHttpUrl(contact.formUrl);
+
+// ページ先頭の目次(内容がある項目だけを並べる)
+const toc = [
+  guides.length > 0 && { id: "guides", label: "詳しく知る" },
+  join.year?.length && { id: "year", label: "1年の流れ" },
+  voices.length > 0 && { id: "voices", label: "在学生の声" },
+  (hasPosts || hasEssays) && { id: "articles", label: "記事" },
+  join.faq?.length && { id: "faq", label: "よくある質問" },
+  { id: "contact", label: "見学・相談" },
+].filter((x): x is { id: string; label: string } => Boolean(x));
+---
+
+<BaseLayout
+  title="研究室で学ぶ"
+  description="見学や配属を考えている学生さん向けに、研究室の様子や進路、連絡先を紹介します。"
+>
+  <h1>研究室で学ぶ<span class="page-subtitle">研究室に興味を持っていただいた方へ</span></h1>
+
+  {
+    !showContent ? (
+      <p class="page-lead">このページは現在準備中です。</p>
+    ) : (
+      <>
+        {import.meta.env.DEV && join.published !== true && (
+          <p class="notice">
+            プレビュー表示です。src/data/join.yaml の published を true にするまで、公開サイトでは「準備中」と表示されます。
+          </p>
+        )}
+
+        {join.lead && <p class="page-lead">{join.lead}</p>}
+        {!join.whatWeDo && (
+          <p>
+            どんな研究をしているかは、<a href={withBase("/research/")}>研究内容</a>
+            のページで紹介しています。シミュレーターを動かしながら、研究の考え方を確かめることもできます。
+          </p>
+        )}
+
+        <nav aria-label="このページの内容">
+          <ul class="page-toc">
+            {toc.map((item) => (
+              <li>
+                <a href={`#${item.id}`}>{item.label}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {join.whatWeDo && (
+          <section>
+            <h2>どんな研究をしているか</h2>
+            <p>{join.whatWeDo}</p>
+            <p>
+              <a href={withBase("/research/")}>研究内容の詳細はこちら</a>
+            </p>
+          </section>
+        )}
+
+        {guides.length > 0 && (
+          <section id="guides">
+            <h2>詳しく知る</h2>
+            <ul class="card-list card-list--compact">
+              {guides.map((guide) => (
+                <li class="card">
+                  <h3 class="card__title">
+                    <a href={withBase(`/join/${guide.id}/`)}>{guide.data.title}</a>
+                    {guide.data.draft && <span class="badge-draft">下書き</span>}
+                  </h3>
+                  {guide.data.summary && <p>{guide.data.summary}</p>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {join.year && join.year.length > 0 && (
+          <section id="year">
+            <h2>研究室の1年</h2>
+            <YearCalendar months={join.year} />
+          </section>
+        )}
+
+        {voices.length > 0 && (
+          <section id="voices">
+            <h2>在学生の声</h2>
+            <ul class="card-list">
+              {voices.map((voice) => (
+                <li class="card voice">
+                  {voice.data.photo && (
+                    <img class="voice__photo" src={withBase(voice.data.photo)} alt={voice.data.displayName} />
+                  )}
+                  <p class="card__meta">
+                    {voice.data.displayName}
+                    {voice.data.grade && ` (${voice.data.grade})`}
+                  </p>
+                  <voice.Content />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {(hasPosts || hasEssays) && (
+          <section id="articles">
+            <h2>研究室の人が書いた記事</h2>
+            <ul class="card-list card-list--compact">
+              {hasPosts && (
+                <li class="card">
+                  <h3 class="card__title">
+                    <a href={withBase("/posts/")}>学生の記事</a>
+                  </h3>
+                  <p>レーザー製作記や学会参加記など、学生が自分の言葉で書いた記事です。</p>
+                </li>
+              )}
+              {hasEssays && (
+                <li class="card">
+                  <h3 class="card__title">
+                    <a href={withBase("/columns/")}>教員コラム</a>
+                  </h3>
+                  <p>企業の研究所と大学の両方で研究してきた教員が、進路や研究について書いています。</p>
+                </li>
+              )}
+            </ul>
+          </section>
+        )}
+
+        {join.faq && join.faq.length > 0 && (
+          <section id="faq">
+            <h2>よくある質問</h2>
+            {join.faq.map((item) => {
+              // 関連するページは、公開されているものだけリンクにする
+              const related = (item.guides ?? [])
+                .map((id) => guides.find((g) => g.id === id))
+                .filter((g): g is (typeof guides)[number] => Boolean(g));
+              const studentVoices = (item.voices ?? []).filter((v) => v.text);
+              return (
+                <details class="faq">
+                  <summary>{item.q}</summary>
+                  {item.a && (
+                    <div class="faq__block">
+                      <p class="faq__label">教員から</p>
+                      <p>{item.a}</p>
+                      {related.length > 0 && (
+                        <p class="faq__links">
+                          関連するページ:{" "}
+                          {related.map((g, i) => (
+                            <>
+                              {i > 0 && "、"}
+                              <a href={withBase(`/join/${g.id}/`)}>{g.data.title}</a>
+                            </>
+                          ))}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {studentVoices.length > 0 ? (
+                    <div class="faq__block faq__block--voices">
+                      <p class="faq__label">先輩たちの声</p>
+                      <ul class="faq__voices">
+                        {studentVoices.map((v) => (
+                          <li>
+                            「{v.text}」{v.who && <span class="faq__who">({v.who})</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    import.meta.env.DEV && (
+                      <p class="notice">先輩たちの声は集計中です(声が入るまで、公開サイトにはこの欄は表示されません)。</p>
+                    )
+                  )}
+                </details>
+              );
+            })}
+          </section>
+        )}
+
+        <section id="contact">
+          <h2>見学・相談の連絡先</h2>
+          <p>
+            {contact.name}
+            {contact.position && ` (${contact.position})`}
+            {contact.email && (
+              <>
+                <br />
+                {isEmail(contact.email) ? (
+                  <a href={`mailto:${contact.email}`}>{contact.email}</a>
+                ) : (
+                  contact.email
+                )}
+              </>
+            )}
+          </p>
+          {contact.note && <p>{contact.note}</p>}
+          {hasForm ? (
+            <>
+              <p>
+                <a class="button" href={contact.formUrl} target="_blank" rel="noopener noreferrer">
+                  {contact.formLabel || "見学・相談フォームを開く"}
+                </a>
+              </p>
+              {contact.formNote && <p class="stat-note">{contact.formNote}</p>}
+            </>
+          ) : (
+            import.meta.env.DEV && (
+              <p class="notice">
+                フォームのURLが未入力のため、ボタンは表示されません(src/data/join.yaml の contact.formUrl)。
+              </p>
+            )
+          )}
+        </section>
+      </>
+    )
+  }
+</BaseLayout>

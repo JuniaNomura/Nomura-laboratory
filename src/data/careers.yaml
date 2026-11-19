@@ -1,0 +1,82 @@
+# 卒業生の進路データ(統計・企業名一覧の元データ)。
+#
+# 個人と結びつかないように、1行につき「進路先・業種・職種」だけを記録します。
+# 氏名・卒業年・学年などは入力しないでください。
+# このリポジトリは公開されているため、ここに書いた内容は誰でも読めます。
+#
+# 入力例:
+#   entries:
+#     - kind: 就職
+#       name: "○○株式会社"
+#       industry: "電気・電子機器"
+#       jobType: "システムエンジニア"
+#     - kind: 進学
+#       name: "○○大学大学院"
+# 業種は公開情報からの推定です(【要確認】)。空欄の業種・職種は「その他」として集計されます。
+entries:
+  - kind: 就職
+    name: "NTTテクノクロス株式会社"
+    industry: "情報通信・ソフトウェア"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "海洋電子工業株式会社"
+    industry: "電気・電子機器"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "テクノプロ"
+    industry: "技術サービス"
+    jobType: "システムエンジニア"
+  - kind: 就職
+    name: "テクノプロ"
+    industry: "技術サービス"
+    jobType: "システムエンジニア"
+  - kind: 就職
+    name: "東光高岳"
+    industry: "電気・電子機器"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "株式会社NSD"
+    industry: "情報通信・ソフトウェア"
+    jobType: "システムエンジニア"
+  - kind: 就職
+    name: "株式会社あいはら"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "株式会社安藤・間"
+    industry: "建設"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "株式会社マーブル"
+    industry: "技術サービス"
+    jobType: "システムエンジニア"
+  - kind: 就職
+    name: "東鉄工業株式会社"
+    industry: "建設"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "JRC特機株式会社"
+    industry: "電気・電子機器"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "池上通信機株式会社"
+    industry: "情報通信・ソフトウェア"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "京三製作所"
+    industry: "電気・電子機器"
+    jobType: "エンジニア"
+  - kind: 就職
+    name: "フューチャーテクノ"
+    industry: "技術サービス"
+    jobType: "システムエンジニア"
+  # 大学院進学(5名)。進学先の名前は未入力です。
+  - kind: 進学
+    name: "野邑研究グループ(日本大学大学院)"
+  - kind: 進学
+    name: "野邑研究グループ(日本大学大学院)"
+  - kind: 進学
+    name: "野邑研究グループ(日本大学大学院)" 
+  - kind: 進学
+    name: "野邑研究グループ(日本大学大学院)"  
+  - kind: 進学
+    name: "野邑研究グループ(日本大学大学院)"

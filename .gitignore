@@ -4,3 +4,7 @@ dist/
 .env
 .DS_Store
 npm-debug.log*
+
+# 公開しない作業メモ
+確認事項チェックリスト.md
+見学相談フォームの文面.md

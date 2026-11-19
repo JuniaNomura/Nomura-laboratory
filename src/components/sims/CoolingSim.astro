@@ -1,0 +1,487 @@
+---
+// レーザー冷却シミュレーター(研究内容「レーザー冷却・光トラップ技術」用)。
+// 上下左右から向かい合わせにレーザーを当てた中で、原子が光子を吸収・放出しながら
+// 冷えていく様子(ドップラー冷却、光の糖蜜)と、磁場を加えて中心に集める様子(磁気光学トラップ)を見る。
+// 研究テーマの frontmatter に simulator: "cooling" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="cooling">
+  <p class="sim__title">レーザー冷却シミュレーター: 光で原子にブレーキをかける</p>
+
+  <div class="sim__controls">
+    <label class="sim__field sim__field--wide">
+      <span
+        >レーザーの周波数(遷移周波数からのずれ。吸収線の幅を1とする): <output data-role="delta-out">−1.0</output></span
+      >
+      <input data-role="delta" type="range" min="-3" max="1" step="0.1" value="-1" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="laser" aria-pressed="false">レーザーを当てる: 切</button>
+    <button type="button" data-role="mot" aria-pressed="false">磁場を入れる(磁気光学トラップ): 切</button>
+    <button type="button" data-role="reset">原子を入れ直す</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="460"
+    role="img"
+    aria-label="左に、上下左右からレーザーが当たる箱の中を飛び回る原子。右上に、原子の速さの分布と、原子にはたらく力のグラフ。右下に、温度の時間変化のグラフ"
+  ></canvas>
+  <p class="sim__caption">
+    左は、原子の入った箱です。上下左右から、同じ強さのレーザー(赤)を向かい合わせに当てています。原子は、光子を吸収すると、光の進む向きに少し押されます(光子の運動量)。光子を吸収した原子は、すぐに別の向きへ光子を出して(このとき明るく光ります)、その反動でまた少し揺さぶられます。右上の棒グラフは、原子の速さの分布(左右方向と上下方向をまとめたもの)で、幅が細いほど温度が低いことを表します。曲線は、その速さの原子にはたらく力の平均です。右下は、温度の変化です。周波数や速さの目盛りは、単位のない仮の値です。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+
+  <p class="sim__caption">
+    実際の例: 室温のルビジウム原子は、秒速300 m ほどで飛び回っています。レーザー冷却では、これを秒速数十 cm 以下まで遅くでき、温度は約0.0001 K(100 μK)という極低温になります。ルビジウムのドップラー限界は、約150 μK です。実際の実験では、さらに別のしくみ(偏光勾配冷却)がはたらき、ドップラー限界より低い温度まで冷えます。このシミュレーターでは、見やすいように原子の動きを遅くし、光子1個の反動を大きくしています。
+  </p>
+</div>
+
+<script>
+  const W = 900;
+  const H = 460;
+  // 箱(左側)
+  const BL = 30;
+  const BT = 30;
+  const BS = 400;
+  const N = 200; // 原子の数
+  const S = 0.5; // レーザー1本の強さ(飽和パラメーター)
+  const VR = 0.1; // 光子1個を吸収・放出したときの、速さの変化(反跳)
+  const TS = 60; // 画面上の1秒あたりに進める、計算上の時間(吸収線の幅の逆数が単位)
+  const SUB = 8; // 1コマを何回に分けて計算するか
+  const V0 = 1.0; // 入れ直したときの、原子の速さのばらつき(熱い状態)
+  const MOVE = 0.35; // 速さ1の原子が、画面上の1秒に進む距離(箱の半分の幅を1とする)
+  const ZEEMAN = 2.5; // 磁気光学トラップで、中心からのずれ1あたりの共鳴周波数のずれ
+  // ドップラー限界にあたる「速さの2乗の平均」(このシミュレーターの値で、計算して求めたもの)
+  const T_LIMIT = 0.063;
+
+  // ずれ d のレーザーを、原子が1単位時間に吸収する割合(吸収線の形)
+  const rate = (d: number): number => (0.5 * S) / (1 + S + 4 * d * d);
+
+  const gauss = (): number =>
+    Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random());
+
+  const setup = (root: HTMLElement) => {
+    const q = <E extends HTMLElement>(role: string) => root.querySelector<E>(`[data-role="${role}"]`)!;
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const deltaIn = q<HTMLInputElement>("delta");
+    const readout = q<HTMLElement>("readout");
+
+    const on = { laser: false, mot: false };
+    const names = { laser: "レーザーを当てる", mot: "磁場を入れる(磁気光学トラップ)" };
+
+    // 位置(箱の中心が0、端が±1)と速さ。[左右, 上下] の2方向
+    const x = [new Float64Array(N), new Float64Array(N)];
+    const v = [new Float64Array(N), new Float64Array(N)];
+    const glow = new Float64Array(N);
+    let temp = V0 * V0; // 表示用に、なめらかにした温度(速さの2乗の平均)
+    const history: number[] = [];
+    let histTimer = 0;
+    const HIST_LEN = 300; // 0.1秒ごとに30秒ぶん
+
+    const reset = () => {
+      for (let i = 0; i < N; i++) {
+        for (let a = 0; a < 2; a++) {
+          x[a][i] = (Math.random() * 2 - 1) * 0.95;
+          v[a][i] = gauss() * V0;
+        }
+        glow[i] = 0;
+      }
+      temp = V0 * V0;
+      history.length = 0;
+    };
+
+    // 速さのばらつきを、極端に速い原子に引きずられないよう、中央値から求める
+    const measureTemp = (): number => {
+      const a: number[] = [];
+      for (let i = 0; i < N; i++) a.push(Math.abs(v[0][i]), Math.abs(v[1][i]));
+      a.sort((p, q2) => p - q2);
+      return (a[Math.floor(a.length / 2)] / 0.6745) ** 2;
+    };
+
+    const advance = (dt: number) => {
+      const delta = Number(deltaIn.value);
+      const tau = (dt * TS) / SUB;
+      for (let s = 0; s < SUB; s++) {
+        for (let i = 0; i < N; i++) {
+          if (on.laser) {
+            for (let a = 0; a < 2; a++) {
+              // 磁気光学トラップでは、中心から離れるほど、中心へ押し戻すレーザーに共鳴しやすくなる
+              const shift = on.mot ? ZEEMAN * x[a][i] : 0;
+              const vi = v[a][i];
+              // +向きに進むレーザーは、-向きに動く原子から見ると周波数が上がって見える(ドップラー効果)
+              const pPlus = rate(delta - vi - shift) * tau;
+              const pMinus = rate(delta + vi + shift) * tau;
+              const r = Math.random();
+              let dir = 0;
+              if (r < pPlus) dir = 1;
+              else if (r < pPlus + pMinus) dir = -1;
+              if (dir !== 0) {
+                v[a][i] += dir * VR; // 吸収: レーザーの進む向きに押される
+                const ph = 2 * Math.PI * Math.random(); // 放出: ばらばらの向きに反動を受ける
+                v[0][i] += VR * Math.cos(ph);
+                v[1][i] += VR * Math.sin(ph);
+                glow[i] = 1;
+              }
+            }
+          }
+          for (let a = 0; a < 2; a++) {
+            x[a][i] += v[a][i] * MOVE * (dt / SUB);
+            // 箱の壁で跳ね返る
+            if (x[a][i] > 1) {
+              x[a][i] = 2 - x[a][i];
+              v[a][i] = -Math.abs(v[a][i]);
+            } else if (x[a][i] < -1) {
+              x[a][i] = -2 - x[a][i];
+              v[a][i] = Math.abs(v[a][i]);
+            }
+          }
+        }
+      }
+      const fade = Math.exp(-dt / 0.12);
+      for (let i = 0; i < N; i++) glow[i] *= fade;
+      temp += (measureTemp() - temp) * Math.min(1, dt / 0.6);
+      histTimer += dt;
+      if (histTimer >= 0.1) {
+        histTimer = 0;
+        history.push(temp);
+        if (history.length > HIST_LEN) history.shift();
+      }
+    };
+
+    const toPx = (u: number, a: number): number => (a === 0 ? BL : BT) + ((u + 1) / 2) * BS;
+
+    const drawBox = () => {
+      // 箱
+      ctx.fillStyle = "#10141c";
+      ctx.fillRect(BL, BT, BS, BS);
+      // レーザー
+      if (on.laser) {
+        ctx.fillStyle = "rgba(255, 70, 70, 0.10)";
+        ctx.fillRect(BL, BT + BS * 0.2, BS, BS * 0.6);
+        ctx.fillRect(BL + BS * 0.2, BT, BS * 0.6, BS);
+        ctx.fillStyle = "#ff7a7a";
+        const c = BL + BS / 2;
+        const m = BT + BS / 2;
+        const arrow = (x1: number, y1: number, x2: number, y2: number) => {
+          ctx.strokeStyle = "#ff7a7a";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+          const ang = Math.atan2(y2 - y1, x2 - x1);
+          ctx.beginPath();
+          ctx.moveTo(x2, y2);
+          ctx.lineTo(x2 - 8 * Math.cos(ang - 0.5), y2 - 8 * Math.sin(ang - 0.5));
+          ctx.lineTo(x2 - 8 * Math.cos(ang + 0.5), y2 - 8 * Math.sin(ang + 0.5));
+          ctx.closePath();
+          ctx.fill();
+        };
+        arrow(BL + 4, m - 30, BL + 40, m - 30);
+        arrow(BL + BS - 4, m + 30, BL + BS - 40, m + 30);
+        arrow(c + 30, BT + 4, c + 30, BT + 40);
+        arrow(c - 30, BT + BS - 4, c - 30, BT + BS - 40);
+      }
+      // 磁場(中心で0、外へ向かって強くなる)
+      if (on.mot) {
+        ctx.strokeStyle = "rgba(140, 170, 255, 0.45)";
+        ctx.lineWidth = 1.5;
+        const c = BL + BS / 2;
+        const m = BT + BS / 2;
+        for (let k = 0; k < 8; k++) {
+          const ang = (k / 8) * Math.PI * 2 + Math.PI / 8;
+          for (const r of [70, 140]) {
+            const len = r === 70 ? 10 : 20;
+            const x1 = c + r * Math.cos(ang);
+            const y1 = m + r * Math.sin(ang);
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x1 + len * Math.cos(ang), y1 + len * Math.sin(ang));
+            ctx.stroke();
+          }
+        }
+        ctx.fillStyle = "#9fb4ff";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("磁場: 中心で0、外側ほど強い", BL + 8, BT + BS - 10);
+      }
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(BL, BT, BS, BS);
+
+      // 原子
+      for (let i = 0; i < N; i++) {
+        const px = toPx(x[0][i], 0);
+        const py = toPx(x[1][i], 1);
+        const g = glow[i];
+        if (g > 0.05) {
+          ctx.fillStyle = `rgba(255, 120, 120, ${(0.35 * g).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.arc(px, py, 7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        const rC = Math.round(150 + 105 * g);
+        const gC = Math.round(165 + 60 * g);
+        const bC = Math.round(200 - 40 * g);
+        ctx.fillStyle = `rgb(${rC}, ${gC}, ${bC})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText("原子の入った箱", BL, BT - 10);
+    };
+
+    // 右上: 速さの分布と、はたらく力
+    const VMAX = 3;
+    const BINS = 60;
+    const counts = new Float64Array(BINS);
+    const drawVelocity = () => {
+      const l = 490;
+      const r = 880;
+      const t = 50;
+      const b = 230;
+      const delta = Number(deltaIn.value);
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText("原子の速さの分布と、はたらく力", l, t - 18);
+
+      const raw = new Float64Array(BINS);
+      for (let i = 0; i < N; i++) {
+        for (let a = 0; a < 2; a++) {
+          const k = Math.floor(((v[a][i] + VMAX) / (2 * VMAX)) * BINS);
+          if (k >= 0 && k < BINS) raw[k]++;
+        }
+      }
+      let maxC = 1;
+      for (let k = 0; k < BINS; k++) {
+        counts[k] += (raw[k] - counts[k]) * 0.15;
+        maxC = Math.max(maxC, counts[k]);
+      }
+      const bw = (r - l) / BINS;
+      ctx.fillStyle = "#4f6ea8";
+      for (let k = 0; k < BINS; k++) {
+        const h = (counts[k] / maxC) * (b - t - 10);
+        ctx.fillRect(l + k * bw + 0.5, b - h, bw - 1, h);
+      }
+
+      const xOf = (vv: number) => l + ((vv + VMAX) / (2 * VMAX)) * (r - l);
+      const mid = (t + b) / 2;
+      // 共鳴する速さ(向かってくるレーザーに、ドップラー効果で周波数が合う速さ)
+      if (on.laser && Math.abs(delta) > 0.05 && Math.abs(delta) < VMAX) {
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "rgba(255, 122, 122, 0.7)";
+        ctx.lineWidth = 1;
+        for (const vv of [delta, -delta]) {
+          ctx.beginPath();
+          ctx.moveTo(xOf(vv), t);
+          ctx.lineTo(xOf(vv), b);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ff9a9a";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("共鳴する速さ", xOf(delta), t - 2);
+        ctx.fillText("共鳴する速さ", xOf(-delta), t - 2);
+        ctx.textAlign = "left";
+      }
+
+      // 力の曲線(中心にいる原子にはたらく、左右方向の力)
+      if (on.laser) {
+        const fs: number[] = [];
+        for (let k = 0; k <= 200; k++) {
+          const vv = -VMAX + (k / 200) * 2 * VMAX;
+          const f = rate(delta - vv) - rate(delta + vv);
+          fs.push(f);
+        }
+        // 縦の目盛りは、周波数のずれによらず固定する(力の大きさを比べられるように)
+        const scale = ((b - t) / 2 - 8) / rate(0);
+        ctx.strokeStyle = "rgba(255,255,255,0.25)";
+        ctx.beginPath();
+        ctx.moveTo(l, mid);
+        ctx.lineTo(r, mid);
+        ctx.stroke();
+        ctx.strokeStyle = "#ffd84d";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        fs.forEach((f, k) => {
+          const px = l + (k / 200) * (r - l);
+          const py = mid - Math.max(-1, Math.min(1, (f * scale) / ((b - t) / 2))) * ((b - t) / 2);
+          if (k === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.stroke();
+        ctx.fillStyle = "#ffd84d";
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText("黄色の線: 力(右向きが+)", r, t - 18);
+        ctx.textAlign = "left";
+      }
+
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(l, b);
+      ctx.lineTo(r, b);
+      ctx.stroke();
+      ctx.fillStyle = "#8a93a3";
+      ctx.font = "11px sans-serif";
+      ctx.fillText("← 左向きに速い", l, b + 16);
+      ctx.textAlign = "center";
+      ctx.fillText("0", xOf(0), b + 16);
+      ctx.textAlign = "right";
+      ctx.fillText("右向きに速い →", r, b + 16);
+      ctx.textAlign = "left";
+    };
+
+    // 右下: 温度の変化
+    const drawTemp = () => {
+      const l = 490;
+      const r = 880;
+      const t = 290;
+      const b = 430;
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText(`温度(ドップラー限界を1とする): ${(temp / T_LIMIT).toFixed(1)}`, l, t - 14);
+      ctx.strokeStyle = "#5a6474";
+      ctx.strokeRect(l, t, r - l, b - t);
+      // 縦軸は対数(0.5〜50)
+      const yOf = (ratio: number) => {
+        const u = (Math.log10(Math.max(0.5, Math.min(50, ratio))) - Math.log10(0.5)) / 2;
+        return b - u * (b - t);
+      };
+      ctx.fillStyle = "#8a93a3";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "right";
+      for (const g of [1, 10]) {
+        ctx.fillText(String(g), l - 4, yOf(g) + 4);
+      }
+      ctx.textAlign = "left";
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = "#7fd1a0";
+      ctx.beginPath();
+      ctx.moveTo(l, yOf(1));
+      ctx.lineTo(r, yOf(1));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#7fd1a0";
+      ctx.fillText("ドップラー限界", l + 6, yOf(1) - 5);
+      ctx.strokeStyle = "#ff8f6b";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      history.forEach((T, k) => {
+        const px = r - ((history.length - 1 - k) / HIST_LEN) * (r - l);
+        const py = yOf(T / T_LIMIT);
+        if (k === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+      ctx.fillStyle = "#8a93a3";
+      ctx.fillText("30秒前", l, b + 16);
+      ctx.textAlign = "right";
+      ctx.fillText("いま", r, b + 16);
+      ctx.textAlign = "left";
+    };
+
+    let textTimer = 0;
+    const updateText = () => {
+      const delta = Number(deltaIn.value);
+      const ratio = temp / T_LIMIT;
+      if (!on.laser) {
+        readout.textContent =
+          "レーザーが当たっていないので、原子は熱い(速い)まま、壁で跳ね返りながら飛び回っています。「レーザーを当てる」を押してください。";
+        return;
+      }
+      let text: string;
+      if (delta > 0.05) {
+        text =
+          "レーザーの周波数が、遷移周波数より高くなっています。今度は、レーザーから遠ざかる原子が共鳴して、後ろから押されるので、原子は加速され、温まっていきます。";
+      } else if (delta >= -0.05) {
+        text =
+          "レーザーの周波数が、遷移周波数とちょうど同じです。止まっている原子がいちばんよく吸収し、動いている原子は、前と後ろから同じだけ押されます。ブレーキがかからないので冷えず、光子の反動で揺さぶられて、少しずつ温まります。";
+      } else {
+        text =
+          "レーザーの周波数を、遷移周波数より少し下げています。レーザーに向かって進む原子には、ドップラー効果で光の周波数が高く見えて共鳴するので、正面から押されてブレーキがかかります。遠ざかる原子には、周波数が低く見えてほとんど吸収されません。";
+        if (delta > -0.4) text += "ただし、下げ方が小さいと、ブレーキの効く速さの範囲が狭く、速い原子はなかなか冷えません。";
+        else if (delta < -1.6)
+          text += "大きく下げると、速い原子にもブレーキが効きますが、遅い原子へのブレーキが弱くなり、冷えるのに時間がかかります。";
+      }
+      if (delta < -0.05 && ratio < 1.4) {
+        text += `温度は、ドップラー限界のおよそ${ratio.toFixed(1)}倍で、これ以上は下がりません。光子を出すときの反動で、原子がばらばらの向きに揺さぶられ続けるためです。`;
+      } else {
+        text += `温度は、ドップラー限界のおよそ${ratio.toFixed(ratio < 10 ? 1 : 0)}倍です。`;
+      }
+      if (on.mot) {
+        text +=
+          delta < -0.05
+            ? "磁場を入れると、中心から離れた原子ほど、中心へ押し戻すレーザーに共鳴しやすくなります。原子は速さだけでなく位置もそろって、中心に光る雲をつくります(磁気光学トラップ)。"
+            : "磁場を入れても、レーザーの周波数が下がっていないと、原子は中心に集まりません。";
+      } else if (delta < -0.05) {
+        text += "冷えた原子は、ゆっくりとただよっていて、中心に集まるわけではありません。「磁場を入れる」を試してください。";
+      }
+      readout.textContent = text;
+    };
+
+    const draw = () => {
+      const delta = Number(deltaIn.value);
+      q<HTMLOutputElement>("delta-out").value = (delta < 0 ? "−" : delta > 0 ? "+" : "") + Math.abs(delta).toFixed(1);
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      drawBox();
+      drawVelocity();
+      drawTemp();
+    };
+
+    (Object.keys(on) as (keyof typeof on)[]).forEach((key) => {
+      const btn = q<HTMLButtonElement>(key);
+      btn.addEventListener("click", () => {
+        on[key] = !on[key];
+        btn.setAttribute("aria-pressed", String(on[key]));
+        btn.textContent = `${names[key]}: ${on[key] ? "入" : "切"}`;
+        updateText();
+        draw();
+      });
+    });
+    q<HTMLButtonElement>("reset").addEventListener("click", () => {
+      reset();
+      updateText();
+      draw();
+    });
+    deltaIn.addEventListener("input", () => {
+      updateText();
+      draw();
+    });
+
+    let last = 0;
+    const loop = (time: number) => {
+      // 折りたたまれて見えていない間は、計算を止める
+      if (root.offsetParent !== null) {
+        const dt = Math.min(0.05, last ? (time - last) / 1000 : 0);
+        advance(dt);
+        draw();
+        textTimer += dt;
+        if (textTimer > 0.5) {
+          textTimer = 0;
+          updateText();
+        }
+      }
+      last = time;
+      requestAnimationFrame(loop);
+    };
+
+    reset();
+    updateText();
+    draw();
+    requestAnimationFrame(loop);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="cooling"]').forEach(setup);
+</script>

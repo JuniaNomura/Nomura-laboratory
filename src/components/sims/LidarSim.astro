@@ -1,0 +1,271 @@
+---
+// コヒーレントライダー シミュレーター(研究内容「コヒーレントライダー」用)。
+// 研究テーマの frontmatter に simulator: "lidar" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="lidar">
+  <p class="sim__title">コヒーレントライダー シミュレーター: 光の「うなり」で風速を測る</p>
+
+  <div class="sim__controls">
+    <label class="sim__field sim__field--wide">
+      <span>風の速さ(センサーに近づく向きを正): <output data-role="v-out">5.0</output> m/s</span>
+      <input data-role="v" type="range" min="-20" max="20" step="0.5" value="5" />
+    </label>
+    <label class="sim__field">
+      <span>基準の光の周波数</span>
+      <select data-role="offset">
+        <option value="80">送った光から 80 MHz ずらす</option>
+        <option value="0">送った光と同じにする</option>
+      </select>
+    </label>
+    <label class="sim__field">
+      <span>雑音の大きさ: <output data-role="noise-out">30</output> %</span>
+      <input data-role="noise" type="range" min="0" max="100" step="5" value="30" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="gust" aria-pressed="false">風を自由に吹かせる(でたらめに変化): 切</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="480"
+    role="img"
+    aria-label="上に受光器の出力波形、中央にその周波数スペクトル、下に風速とドップラーシフトの時間変化"
+  ></canvas>
+  <p class="sim__caption">
+    空気中のちりに当たって戻ってきた光は、風の速さに応じて、周波数がわずかに変わっています(ドップラーシフト)。戻ってきた光と、手元に残しておいた基準の光を重ねると、2つの周波数の差で明るさが振動する「うなり(ビート)」が生じます。上は、そのうなりを受光器でとらえた波形、下は、その波形に含まれる周波数の成分(スペクトル)です。白い破線は、風がないときに山が現れる位置です。いちばん下は、風速(左の目盛り)と、それに対応するドップラーシフト(右の目盛り)の時間変化で、灰色の線が本当の風速、青い点が、スペクトルの山の位置から求めた値です。「風を自由に吹かせる」を入れると、風の速さと向きが、でたらめに変わります。光の波長は1.55 µmとしています。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  const LAMBDA = 1.55e-6; // 波長 [m]
+  const F_MAX = 120; // スペクトルの表示範囲 [MHz]
+  const T_MAX = 200; // 波形の表示範囲 [ns]
+  const V_MAX = 20; // 風速の表示範囲 [m/s]
+  const HIST_SEC = 20; // 時間変化を表示する長さ [秒]
+  const SAMPLE = 0.1; // 計測の間隔 [秒]
+  const GUST_SIZE = 8; // でたらめな風の、ばらつきの大きさ [m/s]
+  const GUST_TIME = 4; // でたらめな風が変わる時間の目安 [秒]
+  const SMOOTH_TIME = 0.7; // 風速の細かいがたつきをならす時間 [秒]
+
+  const gauss = (): number => {
+    const u = 1 - Math.random();
+    const v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+
+  const setup = (root: HTMLElement) => {
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const vIn = q<HTMLInputElement>("v");
+    const offsetIn = q<HTMLSelectElement>("offset");
+    const noiseIn = q<HTMLInputElement>("noise");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+    const gustBtn = q<HTMLButtonElement>("gust");
+    let gust = false;
+    let wind = Number(vIn.value); // でたらめな風のときの、なめらかな風速
+    let target = wind; // でたらめに動く目標の風速(wind は、これをなめらかに追いかける)
+    // 時間変化: [本当の風速, 山の位置から求めた風速(基準の光をずらさないときは、向きがわからない)]
+    const history: [number, number][] = [];
+
+    const draw = (record = false) => {
+      const v = Number(vIn.value);
+      const offset = Number(offsetIn.value); // MHz
+      const noise = Number(noiseIn.value) / 100;
+      q<HTMLOutputElement>("v-out").value = v.toFixed(1);
+      q<HTMLOutputElement>("noise-out").value = noiseIn.value;
+
+      const fd = (2 * v) / LAMBDA / 1e6; // ドップラーシフト [MHz]
+      const fBeat = Math.abs(offset + fd); // うなりの周波数 [MHz]
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "13px sans-serif";
+      const left = 30;
+      const right = W - 20;
+      const n = right - left;
+
+      // --- 上: うなりの波形 ---
+      const wt = 24;
+      const wb = 130;
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left + 0.5, wt + 0.5, n, wb - wt);
+      ctx.strokeStyle = "#ffd84d";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const t = (i / n) * T_MAX; // ns
+        const s = Math.cos(2 * Math.PI * fBeat * 1e-3 * t) + noise * 1.2 * gauss();
+        const y = (wt + wb) / 2 - (s / 4.5) * (wb - wt);
+        if (i === 0) ctx.moveTo(left + i, y);
+        else ctx.lineTo(left + i, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText(`受光器の出力(横軸: 時間、全体で ${T_MAX} ns)`, left, 16);
+
+      // --- 下: スペクトル ---
+      const st = 172;
+      const sb = 284;
+      ctx.strokeStyle = "#5a5a66";
+      ctx.strokeRect(left + 0.5, st + 0.5, n, sb - st);
+      const xOf = (f: number) => left + (f / F_MAX) * n;
+      // 風がないときの位置
+      ctx.strokeStyle = "#ffffff";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(xOf(offset) + (offset === 0 ? 1 : 0), st);
+      ctx.lineTo(xOf(offset) + (offset === 0 ? 1 : 0), sb);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // 山(幅 1.5 MHz)と、雑音の床
+      let best = 0;
+      let bestF = 0;
+      ctx.strokeStyle = "#6fb7ff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const f = (i / n) * F_MAX;
+        const peak = Math.exp(-0.5 * ((f - fBeat) / 1.5) ** 2);
+        const floor = noise * 0.22 * Math.abs(1 + 0.6 * gauss());
+        const p = peak + floor;
+        if (p > best) {
+          best = p;
+          bestF = f;
+        }
+        const y = sb - 4 - Math.min(1.15, p) * ((sb - st - 8) / 1.15);
+        if (i === 0) ctx.moveTo(left + i, y);
+        else ctx.lineTo(left + i, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      for (let f = 0; f <= F_MAX; f += 20) ctx.fillText(`${f}`, xOf(f), sb + 18);
+      ctx.fillText("うなりの周波数 [MHz]", (left + right) / 2, sb + 34);
+      ctx.textAlign = "left";
+      ctx.fillText("周波数スペクトル", left, st - 8);
+
+      // 山の位置から、風速を求める
+      let result: string;
+      const vEstNow = offset > 0 ? ((bestF - offset) * 1e6 * LAMBDA) / 2 : (bestF * 1e6 * LAMBDA) / 2;
+      if (record) {
+        history.push([v, vEstNow]);
+        if (history.length > HIST_SEC / SAMPLE) history.shift();
+      }
+      drawHistory(offset, left, right);
+      if (offset > 0) {
+        const vEst = vEstNow;
+        result = `山の位置(${bestF.toFixed(1)} MHz)から求めた風速 = ${vEst >= 0 ? "+" : ""}${vEst.toFixed(1)} m/s。山が80 MHzより右にあれば近づく風、左にあれば遠ざかる風です。`;
+      } else {
+        const vEst = (bestF * 1e6 * LAMBDA) / 2;
+        result = `山の位置(${bestF.toFixed(1)} MHz)から求めた風の速さ = ${vEst.toFixed(1)} m/s。ただし、近づく風か遠ざかる風かは、区別できません。`;
+      }
+      const gustText = gust
+        ? offset > 0
+          ? " / 風の速さと向きが変わると、ドップラーシフトも同じ形で変わり、スペクトルの山が左右に動きます。風速1 m/sあたり、約1.3 MHzです。"
+          : " / 基準の光をずらしていないので、風が向きを変えても、山は0 MHzの右側にしか現れません。下のグラフの青い点が、本当の風速(灰色)を0で折り返した形になります。"
+        : "";
+      readout.textContent =
+        `ドップラーシフト = 2v/λ = ${fd >= 0 ? "+" : ""}${fd.toFixed(2)} MHz(光の周波数 約193 THz の、およそ ${fd === 0 ? "0" : (Math.abs(fd) / 193.4e6).toExponential(1)} 倍) / ` +
+        `うなりの周波数 = ${fBeat.toFixed(2)} MHz / ${result}${gustText}`;
+    };
+
+    // 風速とドップラーシフトの時間変化
+    const drawHistory = (offset: number, left: number, right: number) => {
+      const top = 346;
+      const bottom = H - 26;
+      const mid = (top + bottom) / 2;
+      const yOf = (v: number) => mid - (Math.max(-V_MAX, Math.min(V_MAX, v)) / V_MAX) * ((bottom - top) / 2);
+      const N = HIST_SEC / SAMPLE;
+      const xOf = (i: number) => right - ((history.length - 1 - i) / (N - 1)) * (right - left);
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left + 0.5, top + 0.5, right - left, bottom - top);
+      ctx.strokeStyle = "#3a3a46";
+      ctx.beginPath();
+      ctx.moveTo(left, mid + 0.5);
+      ctx.lineTo(right, mid + 0.5);
+      ctx.stroke();
+      // 本当の風速
+      ctx.strokeStyle = "rgba(200, 200, 210, 0.75)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      history.forEach(([v], i) => (i === 0 ? ctx.moveTo(xOf(i), yOf(v)) : ctx.lineTo(xOf(i), yOf(v))));
+      ctx.stroke();
+      // 山の位置から求めた値
+      ctx.fillStyle = "#6fb7ff";
+      history.forEach(([, e], i) => {
+        ctx.beginPath();
+        ctx.arc(xOf(i), yOf(e), 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText(`風速とドップラーシフトの時間変化(${HIST_SEC}秒ぶん)`, left, top - 8);
+      ctx.font = "11px sans-serif";
+      const fdMax = ((2 * V_MAX) / LAMBDA / 1e6).toFixed(1);
+      ctx.fillStyle = "#8a8a96";
+      ctx.fillText(`+${V_MAX} m/s(ドップラーシフト +${fdMax} MHz)`, left + 6, top + 13);
+      ctx.fillText("0", left + 6, mid - 4);
+      ctx.fillText(`−${V_MAX} m/s(ドップラーシフト −${fdMax} MHz)`, left + 6, bottom - 5);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(200, 200, 210, 0.9)";
+      ctx.fillText("灰: 本当の風速", right - 6, bottom - 19);
+      ctx.fillStyle = "#6fb7ff";
+      ctx.fillText(offset > 0 ? "青: 山の位置から求めた風速" : "青: 山の位置から求めた風の速さ(向きはわからない)", right - 6, bottom - 5);
+      ctx.textAlign = "left";
+    };
+
+    vIn.addEventListener("input", () => {
+      wind = Number(vIn.value);
+      target = wind;
+      draw();
+    });
+    noiseIn.addEventListener("input", () => draw());
+    offsetIn.addEventListener("change", () => draw());
+    gustBtn.addEventListener("click", () => {
+      gust = !gust;
+      gustBtn.setAttribute("aria-pressed", String(gust));
+      gustBtn.textContent = `風を自由に吹かせる(でたらめに変化): ${gust ? "入" : "切"}`;
+    });
+
+    let last = 0;
+    let acc = 0;
+    const loop = (time: number) => {
+      const dt = Math.min(0.1, last ? (time - last) / 1000 : 0);
+      last = time;
+      // 折りたたまれて見えていない間は、計算を止める
+      if (root.offsetParent !== null) {
+        acc += dt;
+        if (acc >= SAMPLE) {
+          acc = 0;
+          if (gust) {
+            // 風速は、でたらめに、ゆっくり変わる(平均は0 m/s)
+            target += (-target * SAMPLE) / GUST_TIME + GUST_SIZE * Math.sqrt((2 * SAMPLE) / GUST_TIME) * gauss();
+            wind += ((target - wind) * SAMPLE) / SMOOTH_TIME;
+            wind = Math.max(-V_MAX, Math.min(V_MAX, wind));
+            vIn.value = String(Math.round(wind * 2) / 2);
+          }
+          draw(true);
+        }
+      }
+      requestAnimationFrame(loop);
+    };
+    draw();
+    requestAnimationFrame(loop);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="lidar"]').forEach(setup);
+</script>

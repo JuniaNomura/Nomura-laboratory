@@ -1,0 +1,59 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+import { withBase } from "../../utils/url";
+import { isVisible } from "../../utils/visibility";
+
+// 公開できるコラムが1本もないときは、このページ(/columns/)そのものを作らない。
+// (書き終えるまで、一般の人がアドレスを入力しても開けないようにするため。開発サーバーでは下書きも表示される)
+export async function getStaticPaths() {
+  const visible = await getCollection("columns", ({ data }) => isVisible(data));
+  return visible.length > 0 ? [{ params: { index: undefined } }] : [];
+}
+
+const columns = (await getCollection("columns", ({ data }) => isVisible(data))).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+
+// コラムは2種類: research=研究と社会のつながりを紹介するコラム / essay=教員コラム
+const groups = [
+  {
+    title: "研究と社会をつなぐコラム",
+    lead: "研究がどのように社会に貢献するかを、身近な話題から紹介します。",
+    items: columns.filter((c) => c.data.kind === "research"),
+  },
+  {
+    title: "教員コラム: 企業と大学の両方から見た研究",
+    lead: "企業の研究所と大学の両方で研究してきた教員が、進路や研究について日ごろ考えていることを書きます。",
+    items: columns.filter((c) => c.data.kind === "essay"),
+  },
+].filter((g) => g.items.length > 0);
+---
+
+<BaseLayout title="コラム" description="研究と社会のつながりを紹介するコラムと、教員が日ごろ考えていることを書くコラムです。">
+  <h1>コラム</h1>
+
+  {
+    groups.length === 0 ? (
+      <p>コラムは準備中です。</p>
+    ) : (
+      groups.map((group) => (
+        <section>
+          <h2>{group.title}</h2>
+          <p>{group.lead}</p>
+          <ul class="card-list">
+            {group.items.map((column) => (
+              <li class="card">
+                <h3 class="card__title">
+                  <a href={withBase(`/columns/${column.id}/`)}>{column.data.title}</a>
+                  {column.data.draft && <span class="badge-draft">下書き</span>}
+                </h3>
+                {column.data.summary && <p>{column.data.summary}</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    )
+  }
+</BaseLayout>

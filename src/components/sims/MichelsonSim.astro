@@ -1,0 +1,186 @@
+---
+// マイケルソン干渉計シミュレーター(お試し課題「マイケルソン干渉計」用)。
+// 本文(Markdown)の中に <div data-sim="michelson"></div> と書くと、その位置に表示される。
+---
+
+<div class="sim" data-sim-root="michelson">
+  <p class="sim__title">マイケルソン干渉計シミュレーター</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>光源</span>
+      <select data-role="source">
+        <option value="650,0.001">赤色レーザーポインター(650 nm)</option>
+        <option value="532,0.001">緑色レーザーポインター(532 nm)</option>
+        <option value="630,20">赤色LED(630 nm、波長の幅 20 nm)</option>
+      </select>
+    </label>
+    <label class="sim__field">
+      <span>鏡の傾き(画面に入る縞の本数): <output data-role="tilt-out">4</output></span>
+      <input data-role="tilt" type="range" min="0" max="10" step="0.5" value="4" />
+    </label>
+    <label class="sim__field sim__field--wide">
+      <span>鏡の位置(大きく動かす): <output data-role="coarse-out">0</output> µm</span>
+      <input data-role="coarse" type="range" min="0" max="30" step="1" value="0" />
+    </label>
+    <label class="sim__field sim__field--wide">
+      <span>鏡の位置(細かく動かす): <output data-role="fine-out">0</output> nm</span>
+      <input data-role="fine" type="range" min="0" max="1000" step="1" value="0" />
+    </label>
+  </div>
+
+  <canvas data-role="canvas" width="900" height="300" role="img" aria-label="左に干渉計の配置図、中央にスクリーンに映る干渉縞、右に鏡の位置と中心の明るさの関係"
+  ></canvas>
+  <p class="sim__caption">
+    左は干渉計を上から見た図、中央はスクリーンに映る干渉縞、右は、鏡を細かく動かしたときの「スクリーン中心の明るさ」のグラフです(白い丸が現在の位置)。鏡の位置は、2本の腕の長さが等しいところを0としています。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  const setup = (root: HTMLElement) => {
+    const slot = document.querySelector<HTMLElement>('[data-sim="michelson"]');
+    if (slot && !slot.contains(root)) slot.appendChild(root);
+
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const source = q<HTMLSelectElement>("source");
+    const tiltIn = q<HTMLInputElement>("tilt");
+    const coarseIn = q<HTMLInputElement>("coarse");
+    const fineIn = q<HTMLInputElement>("fine");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // 鏡の位置 x[nm] のときの、スクリーン上の位置 u(-1〜1)での明るさ(0〜1)
+    const brightness = (x: number, u: number, lambda: number, width: number, tilt: number): number => {
+      const opd = 2 * x; // 光路差 [nm]
+      const lc = (lambda * lambda) / width; // コヒーレンス長 [nm]
+      const vis = Math.exp(-((opd / lc) ** 2)); // 縞の濃さ(コントラスト)
+      const phase = (2 * Math.PI * opd) / lambda + Math.PI * tilt * u;
+      return 0.5 * (1 + vis * Math.cos(phase));
+    };
+
+    const draw = () => {
+      const [lambda, width] = source.value.split(",").map(Number);
+      const tilt = Number(tiltIn.value);
+      const coarse = Number(coarseIn.value);
+      const fine = Number(fineIn.value);
+      const x = coarse * 1000 + fine; // nm
+      q<HTMLOutputElement>("tilt-out").value = tilt.toFixed(1);
+      q<HTMLOutputElement>("coarse-out").value = String(coarse);
+      q<HTMLOutputElement>("fine-out").value = String(fine);
+      const color = lambda < 600 ? [60, 255, 90] : [255, 50, 40];
+      const css = (k: number) => `rgb(${Math.round(color[0] * k)},${Math.round(color[1] * k)},${Math.round(color[2] * k)})`;
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "13px sans-serif";
+
+      // --- 左: 配置図 ---
+      const bx = 150; // ビームスプリッターの位置
+      const by = 160;
+      const mirrorMove = 8 + (coarse / 30) * 30 + (fine / 1000) * 4; // 可動鏡の表示位置(誇張)
+      ctx.strokeStyle = css(1);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(30, by); // 光源 → BS → 可動鏡
+      ctx.lineTo(bx + 70 + mirrorMove, by);
+      ctx.moveTo(bx, by); // BS → 固定鏡
+      ctx.lineTo(bx, 50);
+      ctx.moveTo(bx, by); // BS → スクリーン
+      ctx.lineTo(bx, 262);
+      ctx.stroke();
+      ctx.strokeStyle = "#9ad0ff"; // ビームスプリッター
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(bx - 18, by + 18);
+      ctx.lineTo(bx + 18, by - 18);
+      ctx.stroke();
+      ctx.strokeStyle = "#e0e0e8"; // 鏡
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(bx - 22, 48);
+      ctx.lineTo(bx + 22, 48);
+      ctx.moveTo(bx + 72 + mirrorMove, by - 22);
+      ctx.lineTo(bx + 72 + mirrorMove, by + 22);
+      ctx.stroke();
+      ctx.strokeStyle = "#8a8a96"; // スクリーン
+      ctx.beginPath();
+      ctx.moveTo(bx - 30, 264);
+      ctx.lineTo(bx + 30, 264);
+      ctx.stroke();
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText("光源", 12, by - 10);
+      ctx.fillText("固定した鏡", bx + 28, 52);
+      ctx.fillText("動かす鏡 →", bx + 40, by - 30);
+      ctx.fillText("半透明の鏡", bx + 22, by + 26);
+      ctx.fillText("スクリーン", bx + 36, 268);
+
+      // --- 中央: 干渉縞 ---
+      const cx = 450;
+      const cy = 150;
+      const rad = 110;
+      for (let px = -rad; px <= rad; px++) {
+        const u = px / rad;
+        const half = Math.sqrt(rad * rad - px * px);
+        // 中心が明るく、周辺が暗いビームの形
+        const env = Math.exp(-1.5 * u * u);
+        ctx.fillStyle = css(brightness(x, u, lambda, width, tilt) * env);
+        ctx.fillRect(cx + px, cy - half, 1, 2 * half);
+      }
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      ctx.fillText("スクリーンに映る光", cx, H - 12);
+
+      // --- 右: 中心の明るさ ---
+      const gl = 640;
+      const gr = W - 20;
+      const gt = 40;
+      const gb = 240;
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(gl + 0.5, gt + 0.5, gr - gl, gb - gt);
+      ctx.strokeStyle = css(1);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= gr - gl; i++) {
+        const f = (i / (gr - gl)) * 1000;
+        const y = gb - brightness(coarse * 1000 + f, 0, lambda, width, tilt) * (gb - gt);
+        if (i === 0) ctx.moveTo(gl + i, y);
+        else ctx.lineTo(gl + i, y);
+      }
+      ctx.stroke();
+      const now = brightness(x, 0, lambda, width, tilt);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(gl + (fine / 1000) * (gr - gl), gb - now * (gb - gt), 5, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      ctx.fillText("0", gl, gb + 18);
+      ctx.fillText("500", (gl + gr) / 2, gb + 18);
+      ctx.fillText("1000 nm", gr - 20, gb + 18);
+      ctx.fillText("鏡の位置(細かく動かす)", (gl + gr) / 2, H - 12);
+      ctx.fillText("中心の明るさ", (gl + gr) / 2, gt - 12);
+
+      const lc = (lambda * lambda) / width / 1000; // µm
+      const vis = Math.exp(-(((2 * x) / (lc * 1000)) ** 2));
+      const lcText = lc >= 1e5 ? `${(lc / 1e6).toPrecision(2)} m` : `${lc.toFixed(0)} µm`;
+      readout.textContent =
+        `光路差 = 2 × ${(x / 1000).toFixed(3)} µm = ${((2 * x) / 1000).toFixed(3)} µm(波長の ${((2 * x) / lambda).toFixed(2)} 個分) / ` +
+        `中心の明るさ = ${(now * 100).toFixed(0)} % / 明暗が1回くり返す鏡の移動量 = λ/2 = ${(lambda / 2).toFixed(0)} nm / ` +
+        `縞の濃さ = ${(vis * 100).toFixed(0)} %(この光源で干渉が見える光路差の目安: ${lcText})`;
+    };
+
+    source.addEventListener("change", draw);
+    for (const el of [tiltIn, coarseIn, fineIn]) el.addEventListener("input", draw);
+    draw();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="michelson"]').forEach(setup);
+</script>

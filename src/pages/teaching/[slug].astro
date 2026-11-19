@@ -1,0 +1,63 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection, render } from "astro:content";
+import { withBase } from "../../utils/url";
+import { isVisible } from "../../utils/visibility";
+import { kindLabels, materialLabels, materialHref, fileFormat } from "../../utils/teaching";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("teaching", ({ data }) => isVisible(data));
+  return entries.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const rows = [
+  ["種類", kindLabels[entry.data.kind]],
+  ["時期", entry.data.period],
+  ["対象", entry.data.audience],
+  ["開催先", entry.data.place],
+].filter((row): row is [string, string] => Boolean(row[1]));
+---
+
+<BaseLayout title={entry.data.title} description={entry.data.summary}>
+  <article>
+    {import.meta.env.DEV && entry.data.draft && (
+      <p class="notice">プレビュー表示です(下書きのため、公開サイトには表示されません)。</p>
+    )}
+    <h1>{entry.data.title}</h1>
+    {entry.data.summary && <p class="page-lead">{entry.data.summary}</p>}
+
+    <dl class="teaching-info">
+      {rows.map(([k, v]) => (
+        <>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </>
+      ))}
+    </dl>
+
+    <Content />
+
+    {entry.data.materials.length > 0 && (
+      <section>
+        <h2>資料</h2>
+        <ul class="teaching-materials">
+          {entry.data.materials.map((m) => (
+            <li>
+              <span class="teaching-type">{materialLabels[m.type]}</span>
+              <a href={materialHref(m.file)} target="_blank" rel="noopener">
+                {m.label}
+              </a>
+              {fileFormat(m.file) && <span class="teaching-format">({fileFormat(m.file)})</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
+  </article>
+  <p><a href={withBase("/teaching/")}>← 教育・アウトリーチに戻る</a></p>
+</BaseLayout>

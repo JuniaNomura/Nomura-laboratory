@@ -1,0 +1,48 @@
+---
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import GratingSim from "../../../components/sims/GratingSim.astro";
+import TofSim from "../../../components/sims/TofSim.astro";
+import MichelsonSim from "../../../components/sims/MichelsonSim.astro";
+import MicSim from "../../../components/sims/MicSim.astro";
+import Bb84Sim from "../../../components/sims/Bb84Sim.astro";
+import ZenoSim from "../../../components/sims/ZenoSim.astro";
+import { getCollection, render } from "astro:content";
+import { withBase } from "../../../utils/url";
+import { isVisible } from "../../../utils/visibility";
+import { challengeLevelLabel } from "../../../utils/challenges";
+
+export async function getStaticPaths() {
+  const challenges = await getCollection("challenges", ({ data }) => isVisible(data));
+  return challenges.map((challenge) => ({
+    params: { slug: challenge.id },
+    props: { challenge },
+  }));
+}
+
+const { challenge } = Astro.props;
+const { Content } = await render(challenge);
+const { data } = challenge;
+---
+
+<BaseLayout title={data.title} description={data.summary}>
+  <article>
+    {import.meta.env.DEV && data.draft && (
+      <p class="notice">プレビュー表示です(下書きのため、公開サイトには表示されません)。</p>
+    )}
+    <p class="card__meta">
+      <span class="tag">お試し課題</span>
+      <span class="tag">{challengeLevelLabel(data.level)}</span>
+      {data.usesLaser && <span class="tag">レーザーを使う部分は、研究室での体験がおすすめ</span>}
+    </p>
+    <h1>{data.title}</h1>
+    <Content />
+    {/* シミュレーターは、本文中の <div data-sim="..."></div> の位置へ自動で移動する */}
+    {data.simulator === "grating" && <GratingSim />}
+    {data.simulator === "tof" && <TofSim />}
+    {data.simulator === "michelson" && <MichelsonSim />}
+    {data.simulator === "mic" && <MicSim />}
+    {data.simulator === "bb84" && <Bb84Sim />}
+    {data.simulator === "zeno" && <ZenoSim />}
+  </article>
+  <p><a href={withBase("/join/challenge/")}>← 配属前にできること に戻る</a></p>
+</BaseLayout>

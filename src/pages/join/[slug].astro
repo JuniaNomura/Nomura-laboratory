@@ -1,0 +1,77 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection, render } from "astro:content";
+import { withBase } from "../../utils/url";
+import { isVisible } from "../../utils/visibility";
+import { challengeLevelLabel } from "../../utils/challenges";
+import FoldTools from "../../components/FoldTools.astro";
+import CareerStats from "../../components/CareerStats.astro";
+
+export async function getStaticPaths() {
+  const guides = await getCollection("guides", ({ data }) => isVisible(data));
+  return guides.map((guide) => ({
+    params: { slug: guide.id },
+    props: { guide },
+  }));
+}
+
+const { guide } = Astro.props;
+const { Content, headings } = await render(guide);
+
+// 本文を見出しごとに折りたたむページでは、先頭に目次と「すべて開く」ボタンを置く
+// (折りたたみそのものは src/plugins/rehype-fold-sections.mjs が行う)
+const sections = guide.data.fold ? headings.filter((h) => h.depth === 2) : [];
+
+// 「配属前にできること」(challenge)のページには、お試し課題の一覧を付ける
+const challenges =
+  guide.id === "challenge"
+    ? (await getCollection("challenges", ({ data }) => isVisible(data))).sort(
+        (a, b) => a.data.order - b.data.order,
+      )
+    : [];
+---
+
+<BaseLayout title={guide.data.title} description={guide.data.summary}>
+  <article>
+    {import.meta.env.DEV && guide.data.draft && (
+      <p class="notice">プレビュー表示です(下書きのため、公開サイトには表示されません)。</p>
+    )}
+    <h1>{guide.data.title}</h1>
+    {sections.length > 0 && (
+      <>
+        <nav aria-label="このページの内容">
+          <ul class="page-toc">
+            {sections.map((h) => (
+              <li>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <p class="stat-note">見出しをクリックすると、内容が開きます。</p>
+        <FoldTools />
+      </>
+    )}
+    <Content />
+    {/* 進路の集計は、本文中の <div data-careers></div> の位置へ自動で移動する */}
+    {guide.id === "career" && <CareerStats />}
+    {challenges.length > 0 && (
+      <ul class="card-list">
+        {challenges.map((c) => (
+          <li class="card">
+            <p class="card__meta">
+              <span class="tag">{challengeLevelLabel(c.data.level)}</span>
+              {c.data.usesLaser && <span class="tag">研究室での体験がおすすめ</span>}
+            </p>
+            <h3 class="card__title">
+              <a href={withBase(`/join/challenges/${c.id}/`)}>{c.data.title}</a>
+              {c.data.draft && <span class="badge-draft">下書き</span>}
+            </h3>
+            {c.data.summary && <p>{c.data.summary}</p>}
+          </li>
+        ))}
+      </ul>
+    )}
+  </article>
+  <p><a href={withBase("/join/")}>← 研究室で学ぶ に戻る</a></p>
+</BaseLayout>

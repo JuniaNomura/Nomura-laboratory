@@ -1,0 +1,86 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+import { withBase } from "../../utils/url";
+import { isVisible } from "../../utils/visibility";
+import { kindLabels, materialLabels, materialHref, fileFormat } from "../../utils/teaching";
+
+const entries = (await getCollection("teaching", ({ data }) => isVisible(data))).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+
+const groups = [
+  {
+    kind: "course",
+    lead: "日本大学 生産工学部で担当した講義です。講義ノート・スライド・試験問題を、公開できる範囲で載せています。",
+  },
+  {
+    kind: "outreach",
+    lead: "高校や公開講座など、学外で行った講義・講演です。",
+  },
+] as const;
+const sections = groups
+  .map((g) => ({ ...g, title: kindLabels[g.kind], items: entries.filter((e) => e.data.kind === g.kind) }))
+  .filter((g) => g.items.length > 0);
+---
+
+<BaseLayout
+  title="教育・アウトリーチ"
+  description="担当した講義や学外講義と、その資料(講義ノート・スライド・試験問題)を公開しています。"
+>
+  <h1>教育・アウトリーチ</h1>
+  <p class="page-lead">
+    担当した講義や、学外で行った講義の資料を公開しています。復習や、研究室の分野がどんな基礎の上に成り立っているかを知る手がかりに使ってください。
+  </p>
+
+  {
+    sections.length === 0 ? (
+      <p>資料は準備中です。</p>
+    ) : (
+      sections.map((section) => (
+        <section>
+          <h2>{section.title}</h2>
+          <p>{section.lead}</p>
+          <ul class="card-list">
+            {section.items.map((entry) => {
+              const meta = [entry.data.period, entry.data.audience, entry.data.place].filter(Boolean).join(" / ");
+              return (
+                <li class="card">
+                  <h3 class="card__title">
+                    <a href={withBase(`/teaching/${entry.id}/`)}>{entry.data.title}</a>
+                    {entry.data.draft && <span class="badge-draft">下書き</span>}
+                  </h3>
+                  {meta && <p class="teaching-meta">{meta}</p>}
+                  {entry.data.summary && <p>{entry.data.summary}</p>}
+                  {entry.data.materials.length > 0 && (
+                    <ul class="teaching-materials">
+                      {entry.data.materials.map((m) => (
+                        <li>
+                          <span class="teaching-type">{materialLabels[m.type]}</span>
+                          <a href={materialHref(m.file)} target="_blank" rel="noopener">
+                            {m.label}
+                          </a>
+                          {fileFormat(m.file) && <span class="teaching-format">({fileFormat(m.file)})</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))
+    )
+  }
+
+  <section>
+    <h2>資料の利用について</h2>
+    <p>
+      公開している資料は、学習のために自由に閲覧・印刷して構いません。資料の著作権は作成者にあります。ほかの場所への転載や、講義・研修などでの利用を希望する場合は、事前にご連絡ください。資料の誤りに気づいた場合も、知らせてもらえると助かります。
+    </p>
+    <p>
+      授業の内容や成績についての質問は、このページや研究室の連絡先ではなく、授業の中や、大学の決められた方法で受け付けています。
+    </p>
+  </section>
+</BaseLayout>

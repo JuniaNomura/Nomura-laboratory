@@ -1,0 +1,168 @@
+---
+// 量子ゼノン効果シミュレーター(お試し課題「量子ゼノン効果」用)。
+// 本文(Markdown)の中に <div data-sim="zeno"></div> と書くと、その位置に表示される。
+---
+
+<div class="sim" data-sim-root="zeno">
+  <p class="sim__title">量子ゼノン効果シミュレーター(偏光板モデル)</p>
+
+  <div class="sim__controls">
+    <label class="sim__field sim__field--wide">
+      <span>「観測」する回数 N(縦向きの偏光板の枚数。最後の1枚は出口):<output data-role="n-out">1</output></span>
+      <input data-role="n" type="range" min="1" max="50" step="1" value="1" />
+    </label>
+    <label class="sim__field sim__field--wide">
+      <span>偏光板1枚の透過率(向きが合った光を通す割合): <output data-role="t-out">100</output> %</span>
+      <input data-role="t" type="range" min="70" max="100" step="1" value="100" />
+    </label>
+  </div>
+
+  <canvas data-role="canvas" width="900" height="300" role="img" aria-label="上に、偏光が回っては偏光板で縦に戻される様子、下に、観測の回数と光子が生き残る確率のグラフ"
+  ></canvas>
+  <p class="sim__caption">
+    上の図は、光子が左から右へ進む様子です。偏光(矢印)は、進むにつれて少しずつ回り、全体で90°回ります。等しい間隔でN枚の縦向きの偏光板(青い線。最後の1枚は出口)があり、そこを通るたびに、偏光は縦に戻されます。矢印の濃さは、そこまで光子が生き残っている確率を表します(偏光板が多いときは、一部だけを描いています)。下のグラフは、Nと、最後まで生き残る確率の関係です(白い丸が現在のN)。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  // 90°の回転をN等分し、そのたびに縦の偏光板(透過率 T)を通すとき、最後まで生き残る確率
+  const survive = (n: number, T: number): number => Math.pow(T * Math.cos(Math.PI / (2 * n)) ** 2, n);
+
+  const setup = (root: HTMLElement) => {
+    const slot = document.querySelector<HTMLElement>('[data-sim="zeno"]');
+    if (slot && !slot.contains(root)) slot.appendChild(root);
+
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const nIn = q<HTMLInputElement>("n");
+    const tIn = q<HTMLInputElement>("t");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // 偏光の向きを表す両矢印(angle は縦からの回転角[rad])
+    const arrow = (x: number, y: number, angle: number, alpha: number) => {
+      const len = 22;
+      const dx = Math.sin(angle) * len;
+      const dy = -Math.cos(angle) * len;
+      ctx.strokeStyle = `rgba(255,216,77,${Math.max(0.12, alpha)})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(x - dx, y - dy);
+      ctx.lineTo(x + dx, y + dy);
+      ctx.stroke();
+    };
+
+    const draw = () => {
+      const n = Number(nIn.value);
+      const T = Number(tIn.value) / 100;
+      q<HTMLOutputElement>("n-out").value = String(n);
+      q<HTMLOutputElement>("t-out").value = tIn.value;
+      const step = Math.PI / (2 * n); // 1区間で回る角度
+      const pStep = T * Math.cos(step) ** 2; // 偏光板1枚を通り抜ける確率
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "13px sans-serif";
+
+      // --- 上: 偏光の変化 ---
+      const left = 40;
+      const right = W - 40;
+      const cy = 62;
+      const shown = Math.min(n, 12); // 図に描く偏光板の枚数
+      const seg = (right - left) / shown;
+      ctx.strokeStyle = "#3a3a46";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left, cy);
+      ctx.lineTo(right, cy);
+      ctx.stroke();
+      for (let k = 0; k < shown; k++) {
+        // 描いている区間が、実際には何枚目にあたるか
+        const index = shown === n ? k : Math.round((k / (shown - 1)) * (n - 1));
+        const alpha = Math.pow(pStep, index);
+        const x0 = left + k * seg;
+        // 区間の中で、偏光が少しずつ回る
+        const marks = shown <= 4 ? 4 : 2;
+        for (let j = 0; j < marks; j++) {
+          const f = j / marks;
+          arrow(x0 + 14 + f * (seg - 22), cy, f * step, alpha);
+        }
+        arrow(x0 + seg - 12, cy, step, alpha);
+        // 偏光板
+        ctx.strokeStyle = "#6fb7ff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x0 + seg - 2, cy - 34);
+        ctx.lineTo(x0 + seg - 2, cy + 34);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText("入口(縦の偏光)", left, 18);
+      ctx.textAlign = "right";
+      ctx.fillText("出口", right, 18);
+
+      // --- 下: N と生き残る確率 ---
+      const gl = 70;
+      const gr = W - 30;
+      const gt = 130;
+      const gb = 250;
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(gl + 0.5, gt + 0.5, gr - gl, gb - gt);
+      const xOf = (k: number) => gl + ((k - 1) / 49) * (gr - gl);
+      const yOf = (p: number) => gb - p * (gb - gt);
+      ctx.strokeStyle = "#ffd84d";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let k = 1; k <= 50; k++) {
+        if (k === 1) ctx.moveTo(xOf(k), yOf(survive(k, T)));
+        else ctx.lineTo(xOf(k), yOf(survive(k, T)));
+      }
+      ctx.stroke();
+      ctx.fillStyle = "#ffd84d";
+      for (let k = 1; k <= 50; k++) {
+        ctx.beginPath();
+        ctx.arc(xOf(k), yOf(survive(k, T)), 2.5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      const p = survive(n, T);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(xOf(n), yOf(p), 6, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      for (const k of [1, 10, 20, 30, 40, 50]) ctx.fillText(String(k), xOf(k), gb + 18);
+      ctx.fillText("観測の回数 N", (gl + gr) / 2, H - 10);
+      ctx.textAlign = "right";
+      ctx.fillText("100 %", gl - 8, gt + 5);
+      ctx.fillText("50 %", gl - 8, (gt + gb) / 2 + 5);
+      ctx.fillText("0 %", gl - 8, gb + 5);
+
+      // いちばん確率が高くなる N を探す
+      let best = 1;
+      for (let k = 2; k <= 50; k++) if (survive(k, T) > survive(best, T)) best = k;
+      const bestText =
+        T < 1
+          ? ` / この透過率では、N = ${best} のとき最大(${(survive(best, T) * 100).toFixed(1)} %)`
+          : "";
+      readout.textContent =
+        `1回の観測までに偏光が回る角度 = 90° ÷ ${n} = ${(90 / n).toFixed(1)}° / ` +
+        `偏光板1枚を通り抜ける確率 = ${(pStep * 100).toFixed(1)} % / ` +
+        `最後まで縦の偏光のまま生き残る確率 = ${(p * 100).toFixed(1)} %${bestText}` +
+        "";
+    };
+
+    nIn.addEventListener("input", draw);
+    tIn.addEventListener("input", draw);
+    draw();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="zeno"]').forEach(setup);
+</script>

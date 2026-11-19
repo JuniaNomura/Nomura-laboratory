@@ -1,0 +1,417 @@
+---
+// 光周波数コムのシミュレーター(研究内容「モード同期レーザー(光周波数コム)」用、2つめ)。
+// パルス列の時間波形と、周波数軸上のコムの線を並べて、
+// 繰り返し周波数 frep と、キャリア・エンベロープ・オフセット周波数 fceo の関係を見る。
+// 研究テーマの frontmatter に simulator2: "comb" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="comb">
+  <p class="sim__title">光周波数コム シミュレーター: 2つの数 frep と fceo で、すべての線の周波数が決まる</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>繰り返し周波数 frep: <output data-role="frep-out">1.00</output></span>
+      <input data-role="frep" type="range" min="0.7" max="1.4" step="0.01" value="1" />
+    </label>
+    <label class="sim__field">
+      <span>パルスごとの位相のずれ Δφ: <output data-role="dphi-out">90</output>°</span>
+      <input data-role="dphi" type="range" min="0" max="360" step="1" value="90" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="auto" aria-pressed="false">Δφ を自動で動かす: 切</button>
+    <button type="button" data-role="f2f" aria-pressed="false">f-2f 自己参照を表示: 切</button>
+  </div>
+  <div class="sim__buttons">
+    <button type="button" data-role="freeFrep" aria-pressed="false">frep: 固定</button>
+    <button type="button" data-role="freeFceo" aria-pressed="false">fceo: 固定</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="576"
+    role="img"
+    aria-label="上に、パルス列の時間波形(包絡線と、その中で振動する光の波)。下に、周波数軸上に等間隔に並ぶコムの線と、その並びを0まで延ばしたときのずれ fceo"
+  ></canvas>
+  <p class="sim__caption">
+    上は、モード同期レーザーから出るパルス列の時間波形です。灰色の破線がパルスの形(包絡線)、黄色の線が、その中で振動する光の波(キャリア)です。白い点は、包絡線の山にいちばん近い、光の波の山を表します。レーザーの中では、包絡線と光の波の進む速さがわずかに違うため、パルスが1つ出るごとに、光の波の山が包絡線に対して少しずつずれていきます。このずれを、位相の角度で表したものが Δφ です。下は、同じ光のスペクトルです。線の間隔は frep で、線の並びを0の方へ延ばすと、0からわずかにずれた位置に届きます。このずれが fceo です。「frep」「fceo」のボタンで、それぞれを「揺らぐ」にすると、実際のレーザーのように、値がでたらめに揺らぎます。灰色の短い線は、揺らぎがないときの線の位置です。周波数や時間の目盛りは、単位のない仮の値です。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+
+  <p class="sim__caption">
+    実際の例: 光ファイバーを使ったモード同期レーザーでは、frep は数十 MHz〜1 GHz 程度、光の周波数は約200 THz(波長1.5 μm)です。frep が100 MHzなら、200 THz の光は、およそ200万番目の線にあたります。frep は、パルス列を光検出器で受けると、電気の信号として直接測れます。fceo は、そのままでは測れないので、スペクトルを1オクターブ(周波数で2倍)以上に広げて、f-2f 自己参照という方法で取り出します。frep と fceo の2つを、マイクロ波の周波数標準に合わせて固定すると、数百万本の線すべての周波数が、標準と同じ精度で決まります。
+  </p>
+</div>
+
+<script>
+  const W = 900;
+  const H = 576;
+  const L = 40;
+  const R = 880;
+  // 時間波形
+  const T_TOP = 46;
+  const T_BOT = 176;
+  const T_SPAN = 4.2; // 表示する時間の幅(frep = 1 のときのパルス間隔を1とする)
+  const T0 = 0.35; // 最初のパルスの時刻
+  const SIGMA_T = 0.06; // パルスの幅(包絡線の標準偏差)
+  const FC = 12; // 光の波(キャリア)の中心周波数
+  // スペクトル
+  const S_TOP = 240;
+  const S_BOT = 420;
+  const F_SPAN = 24; // 表示する周波数の範囲(0〜)
+  const SIGMA_F = 1 / (2 * Math.PI * SIGMA_T); // スペクトルの幅(パルスの幅で決まる)
+  const F2F_LOW = 8; // f-2f で2倍にする線の、おおよその周波数
+  // f-2f の拡大図
+  const Z_TOP = 492;
+  const Z_BOT = 556;
+
+  const setup = (root: HTMLElement) => {
+    const q = <E extends HTMLElement>(role: string) => root.querySelector<E>(`[data-role="${role}"]`)!;
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const frepIn = q<HTMLInputElement>("frep");
+    const dphiIn = q<HTMLInputElement>("dphi");
+    const readout = q<HTMLElement>("readout");
+    const on = { auto: false, f2f: false };
+    const names = { auto: "Δφ を自動で動かす", f2f: "f-2f 自己参照を表示" };
+    // 揺らぎ: スライダーで決めた値からの、ずれ(ゆっくり、でたらめに変わる)
+    const free = { freeFrep: false, freeFceo: false };
+    const noise = { frep: 0, dphi: 0 };
+    const NOISE_FREP = 0.035; // frep の揺らぎの大きさ
+    const NOISE_DPHI = 35; // Δφ の揺らぎの大きさ(°)
+    const NOISE_TIME = 0.8; // 揺らぎが変わる時間の目安(秒)
+    const LOCK_TIME = 0.25; // 固定したとき、ずれが消えるまでの時間の目安(秒)
+    const gauss = (): number =>
+      Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random());
+    // 揺らぎを含めた、いまの値
+    const current = () => {
+      const frep = Number(frepIn.value) + noise.frep;
+      const deg = (((Number(dphiIn.value) + noise.dphi) % 360) + 360) % 360;
+      return { frep, deg, fceo: (deg / 360) * frep };
+    };
+
+    const line = (x1: number, y1: number, x2: number, y2: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    };
+    // 2点の間に、両端が縦棒の寸法線を引いて、ラベルを付ける
+    const bracket = (x1: number, x2: number, y: number, label: string, color: string) => {
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 1.5;
+      line(x1, y, x2, y);
+      line(x1, y - 5, x1, y + 5);
+      line(x2, y - 5, x2, y + 5);
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(label, (x1 + x2) / 2, y - 8);
+      ctx.textAlign = "left";
+    };
+
+    const drawTime = (frep: number, dphi: number) => {
+      const T = 1 / frep;
+      const xOf = (t: number) => L + (t / T_SPAN) * (R - L);
+      const mid = (T_TOP + T_BOT) / 2;
+      const amp = (T_BOT - T_TOP) / 2 - 6;
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText("時間波形(パルス列)", L, T_TOP - 22);
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 1;
+      line(L, mid, R, mid);
+
+      const pulses: number[] = [];
+      for (let k = 0; T0 + k * T < T_SPAN + 0.3; k++) pulses.push(k);
+
+      // 包絡線
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = "#7d8696";
+      ctx.lineWidth = 1.2;
+      for (const sign of [1, -1]) {
+        ctx.beginPath();
+        for (let px = L; px <= R; px++) {
+          const t = ((px - L) / (R - L)) * T_SPAN;
+          let e = 0;
+          for (const k of pulses) e += Math.exp(-((t - T0 - k * T) ** 2) / (2 * SIGMA_T ** 2));
+          const y = mid - sign * e * amp;
+          if (px === L) ctx.moveTo(px, y);
+          else ctx.lineTo(px, y);
+        }
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      // 光の波(キャリア)
+      ctx.strokeStyle = "#ffd84d";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (let px = L; px <= R; px += 0.5) {
+        const t = ((px - L) / (R - L)) * T_SPAN;
+        let e = 0;
+        for (const k of pulses) {
+          const dt = t - T0 - k * T;
+          e += Math.exp(-(dt ** 2) / (2 * SIGMA_T ** 2)) * Math.cos(2 * Math.PI * FC * dt + k * dphi);
+        }
+        const y = mid - e * amp;
+        if (px === L) ctx.moveTo(px, y);
+        else ctx.lineTo(px, y);
+      }
+      ctx.stroke();
+
+      // 包絡線の山と、いちばん近い光の波の山
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      for (const k of pulses) {
+        const tk = T0 + k * T;
+        if (tk > T_SPAN - 0.05) continue;
+        const shift = -(((((k * dphi) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) / (2 * Math.PI * FC);
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 1;
+        line(xOf(tk), T_TOP - 4, xOf(tk), T_BOT + 4);
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(xOf(tk + shift), mid - amp, 4, 0, Math.PI * 2);
+        ctx.fill();
+        const deg = Math.round(((k * dphi * 180) / Math.PI) % 360);
+        ctx.fillStyle = "#cfd6e2";
+        ctx.fillText(`${k + 1}つめ: ずれ ${deg}°`, xOf(tk), T_BOT + 20);
+      }
+      ctx.textAlign = "left";
+
+      // パルスの間隔
+      if (T0 + T < T_SPAN) bracket(xOf(T0 + T), xOf(T0 + 2 * T), T_TOP - 8, "間隔 T = 1 ÷ frep", "#8fd3ff");
+    };
+
+    const drawSpectrum = (frep: number, fceo: number) => {
+      const xOf = (f: number) => L + (f / F_SPAN) * (R - L);
+      const base = S_BOT;
+      const hMax = S_BOT - S_TOP - 30;
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText("スペクトル(周波数の軸)", L, S_TOP - 10);
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 1;
+      line(L, base, R, base);
+      ctx.fillStyle = "#8a93a3";
+      ctx.font = "12px sans-serif";
+      ctx.fillText("0", L - 4, base + 16);
+      ctx.textAlign = "right";
+      ctx.fillText("周波数 →", R, base + 16);
+      ctx.textAlign = "left";
+      ctx.strokeStyle = "#8a93a3";
+      line(L, base - 8, L, base + 4);
+
+      // 2倍にする線の番号(f-2f 用)
+      const nLow = Math.round((F2F_LOW - fceo) / frep);
+      for (let n = 0; n * frep + fceo <= F_SPAN; n++) {
+        const f = n * frep + fceo;
+        const a = Math.exp(-((f - FC) ** 2) / (2 * SIGMA_F ** 2));
+        const x = xOf(f);
+        if (a < 0.03) {
+          // 光は出ていないが、等間隔の並びを延ばした位置
+          ctx.setLineDash([3, 3]);
+          ctx.strokeStyle = "rgba(255, 216, 77, 0.35)";
+          ctx.lineWidth = 1.2;
+          line(x, base, x, base - 26);
+          ctx.setLineDash([]);
+          continue;
+        }
+        let color = "#ffd84d";
+        if (on.f2f && (n === nLow || n === 2 * nLow)) color = n === nLow ? "#6fe3ff" : "#ffffff";
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        line(x, base, x, base - a * hMax);
+      }
+
+      // 揺らぎがないときの線の位置(灰色の短い線)
+      if (free.freeFrep || free.freeFceo || Math.abs(noise.frep) > 1e-3 || Math.abs(noise.dphi) > 0.5) {
+        const fr0 = Number(frepIn.value);
+        const ce0 = ((Number(dphiIn.value) % 360) / 360) * fr0;
+        ctx.strokeStyle = "rgba(200, 200, 200, 0.55)";
+        ctx.lineWidth = 2;
+        for (let n = 0; n * fr0 + ce0 <= F_SPAN; n++) {
+          const x = xOf(n * fr0 + ce0);
+          line(x, base + 2, x, base + 10);
+        }
+      }
+
+      // frep と fceo の寸法線
+      const nMid = Math.round((FC - fceo) / frep);
+      bracket(xOf(nMid * frep + fceo), xOf((nMid + 1) * frep + fceo), S_TOP + 14, "frep", "#8fd3ff");
+      if (fceo > 0.02) bracket(xOf(0), xOf(fceo), base - 40, "fceo", "#ff9f6b");
+      else {
+        ctx.fillStyle = "#ff9f6b";
+        ctx.font = "13px sans-serif";
+        ctx.fillText("fceo = 0", xOf(0) + 6, base - 46);
+      }
+      ctx.fillStyle = "#8a93a3";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("破線: 線の並びを0の方へ延ばした位置(実際に光は出ていない)", R, base + 34);
+      ctx.textAlign = "left";
+
+      if (on.f2f) {
+        const fLow = nLow * frep + fceo;
+        const fDouble = 2 * fLow;
+        // 2倍にした線(本当は、非線形結晶で周波数を2倍にした光)
+        ctx.strokeStyle = "#6fe3ff";
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 2;
+        line(xOf(fDouble), base, xOf(fDouble), base - 0.6 * hMax);
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#6fe3ff";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(`${nLow}番目の線`, xOf(fLow), base - 0.45 * hMax - 8);
+        ctx.fillText("周波数を2倍", xOf(fDouble), base - 0.6 * hMax - 8);
+        ctx.textAlign = "left";
+        drawZoom(frep, fceo, nLow);
+      }
+    };
+
+    // f-2f の拡大図: 2n番目の線と、n番目の線を2倍にしたものの差が fceo になる
+    const drawZoom = (frep: number, fceo: number, nLow: number) => {
+      const f2n = 2 * nLow * frep + fceo;
+      const fDouble = 2 * (nLow * frep + fceo);
+      const lo = f2n - 0.35 * frep;
+      const hi = f2n + 1.35 * frep;
+      const xOf = (f: number) => L + ((f - lo) / (hi - lo)) * (R - L);
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText(`拡大図: ${2 * nLow}番目の線のまわり`, L, Z_TOP - 8);
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 1;
+      line(L, Z_BOT, R, Z_BOT);
+      for (const n of [2 * nLow, 2 * nLow + 1]) {
+        const f = n * frep + fceo;
+        if (f < lo || f > hi) continue;
+        ctx.strokeStyle = n === 2 * nLow ? "#ffffff" : "#ffd84d";
+        ctx.lineWidth = 3;
+        line(xOf(f), Z_BOT, xOf(f), Z_TOP + 14);
+      }
+      ctx.strokeStyle = "#6fe3ff";
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 2;
+      line(xOf(fDouble), Z_BOT, xOf(fDouble), Z_TOP + 14);
+      ctx.setLineDash([]);
+      if (fceo > 0.02) bracket(xOf(f2n), xOf(fDouble), Z_TOP + 30, "差 = fceo", "#ff9f6b");
+      else {
+        ctx.fillStyle = "#ff9f6b";
+        ctx.fillText("2つの線が重なっている(fceo = 0)", xOf(f2n) + 8, Z_TOP + 26);
+      }
+    };
+
+    const updateText = (frep: number, deg: number, fceo: number) => {
+      const n = 12;
+      const r = (deg: number) => Math.round(deg);
+      deg = r(deg);
+      let text = `パルスの間隔は T = 1 ÷ frep = ${(1 / frep).toFixed(2)} です。パルスが1つ出るごとに、光の波の山が包絡線の山から ${deg}° ずつずれていきます。このとき、fceo = (Δφ ÷ 360°) × frep = ${fceo.toFixed(2)} です。どの線の周波数も、f = n × frep + fceo で決まり、たとえば n = ${n} の線は ${n} × ${frep.toFixed(2)} + ${fceo.toFixed(2)} = ${(n * frep + fceo).toFixed(2)} です。`;
+      if (deg === 0 || deg === 360)
+        text += "ずれが0°(または360°)のときは、どのパルスも同じ形になり、線の並びを延ばすと、ちょうど0に届きます。";
+      else
+        text += "Δφ を変えると、すべての線が、間隔を保ったまま一緒に横へずれます。frep を変えると、線の間隔と、パルスの間隔が、反比例して変わります。";
+      if (free.freeFrep && free.freeFceo)
+        text +=
+          "いまは frep も fceo も揺らいでいるので、どの線も止まらず、ものさしとして使えません。実際のレーザーでも、温度や振動で共振器の長さが変わると frep が、励起光の強さなどが変わると fceo が揺らぎます。";
+      else if (free.freeFrep)
+        text +=
+          "いまは frep だけが揺らいでいます。線の間隔が伸び縮みするので、0に近い線はあまり動きませんが、周波数の高い線ほど大きく動きます。光の周波数は frep のおよそ200万倍なので、frep のわずかな揺らぎも、光の領域では大きな揺らぎになります。";
+      else if (free.freeFceo)
+        text +=
+          "いまは fceo だけが揺らいでいます。線の間隔は変わらず、すべての線が同じだけ、一緒に横に揺れます。";
+      else
+        text +=
+          "frep と fceo の両方を固定すると、すべての線が止まり、光の周波数を測るものさしとして使えます。実際には、frep と fceo を測って、マイクロ波の周波数標準と比べ、ずれを打ち消すようにレーザーを制御(フィードバック)して固定します。";
+      if (on.f2f)
+        text +=
+          "f-2f 自己参照では、低い周波数側の n 番目の線の周波数を2倍にして、高い周波数側の 2n 番目の線と比べます。2 × (n × frep + fceo) − (2n × frep + fceo) = fceo なので、2つの差(うなり)から fceo が測れます。ただし、スペクトルが1オクターブ(周波数で2倍)以上に広がっている必要があります。";
+      readout.textContent = text;
+    };
+
+    let textTimer = 0;
+    const draw = (withText = true) => {
+      const { frep, deg, fceo } = current();
+      const dphi = (deg * Math.PI) / 180;
+      q<HTMLOutputElement>("frep-out").value = frep.toFixed(2);
+      q<HTMLOutputElement>("dphi-out").value = String(Math.round(deg));
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      drawTime(frep, dphi);
+      drawSpectrum(frep, fceo);
+      if (withText) updateText(frep, deg, fceo);
+    };
+
+    (Object.keys(on) as (keyof typeof on)[]).forEach((key) => {
+      const btn = q<HTMLButtonElement>(key);
+      btn.addEventListener("click", () => {
+        on[key] = !on[key];
+        btn.setAttribute("aria-pressed", String(on[key]));
+        btn.textContent = `${names[key]}: ${on[key] ? "入" : "切"}`;
+        draw();
+      });
+    });
+    (Object.keys(free) as (keyof typeof free)[]).forEach((key) => {
+      const btn = q<HTMLButtonElement>(key);
+      const label = key === "freeFrep" ? "frep" : "fceo";
+      btn.addEventListener("click", () => {
+        free[key] = !free[key];
+        btn.setAttribute("aria-pressed", String(free[key]));
+        btn.textContent = `${label}: ${free[key] ? "揺らぐ" : "固定"}`;
+        draw();
+      });
+    });
+    frepIn.addEventListener("input", () => draw());
+    dphiIn.addEventListener("input", () => draw());
+
+    let last = 0;
+    let acc = 0;
+    const loop = (time: number) => {
+      const dt = Math.min(0.05, last ? (time - last) / 1000 : 0);
+      last = time;
+      // 動かすのは、見えているときだけ
+      if (root.offsetParent !== null) {
+        let changed = false;
+        if (on.auto) {
+          acc += dt * 30; // 1秒あたり30°
+          if (acc >= 1) {
+            const step = Math.floor(acc);
+            acc -= step;
+            dphiIn.value = String((Number(dphiIn.value) + step) % 361);
+            changed = true;
+          }
+        }
+        // 揺らぐ: でたらめに、ゆっくり変わる / 固定: ずれがすばやく0に戻る
+        const walk = (key: "frep" | "dphi", isFree: boolean, size: number) => {
+          const before = noise[key];
+          if (isFree) {
+            noise[key] += -(noise[key] * dt) / NOISE_TIME + size * Math.sqrt((2 * dt) / NOISE_TIME) * gauss();
+          } else {
+            noise[key] *= Math.exp(-dt / LOCK_TIME);
+            if (Math.abs(noise[key]) < 1e-4) noise[key] = 0;
+          }
+          if (noise[key] !== before) changed = true;
+        };
+        walk("frep", free.freeFrep, NOISE_FREP);
+        walk("dphi", free.freeFceo, NOISE_DPHI);
+        if (changed) {
+          textTimer += dt;
+          const withText = textTimer > 0.6 || on.auto;
+          if (withText) textTimer = 0;
+          draw(withText);
+        }
+      }
+      requestAnimationFrame(loop);
+    };
+
+    draw();
+    requestAnimationFrame(loop);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="comb"]').forEach(setup);
+</script>

@@ -1,0 +1,204 @@
+---
+// 光マイクロホン シミュレーター(お試し課題「光マイクロホン」用)。
+// 本文(Markdown)の中に <div data-sim="mic"></div> と書くと、その位置に表示される。
+---
+
+<div class="sim" data-sim-root="mic">
+  <p class="sim__title">光マイクロホン シミュレーター</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>音の高さ(周波数): <output data-role="freq-out">440</output> Hz</span>
+      <input data-role="freq" type="range" min="100" max="2000" step="10" value="440" />
+    </label>
+    <label class="sim__field">
+      <span>音の大きさ(光の点が揺れる幅): <output data-role="amp-out">0.20</output> mm</span>
+      <input data-role="amp" type="range" min="0" max="2" step="0.02" value="0.2" />
+    </label>
+    <label class="sim__field">
+      <span>光の点の中心の位置: <output data-role="pos-out">0.0</output> mm</span>
+      <input data-role="pos" type="range" min="-3" max="3" step="0.1" value="0" />
+    </label>
+    <label class="sim__field">
+      <span>光の点の半径: <output data-role="w-out">1.0</output> mm</span>
+      <input data-role="w" type="range" min="0.3" max="3" step="0.1" value="1" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="play">受光器の出力を音で聞く(1秒)</button>
+  </div>
+
+  <canvas data-role="canvas" width="900" height="260" role="img" aria-label="左に受光器と光の点、右に受光器の出力波形"
+  ></canvas>
+  <p class="sim__caption">
+    左は、受光器(灰色の部分)と、その端にかかった光の点です。光の点は、音に合わせて左右に揺れます(ゆっくりにして表示しています)。「光の点の中心の位置」は、受光器の端を0として、右(受光器の側)を正としています。右は、受光器の出力の波形(黄色。光がすべて入ると100 %、まったく入らないと0 %)と、もとの音の波形(青い破線)です。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  // 誤差関数 erf の近似式(Abramowitz and Stegun 7.1.26)
+  const erf = (x: number): number => {
+    const sign = x < 0 ? -1 : 1;
+    const a = Math.abs(x);
+    const t = 1 / (1 + 0.3275911 * a);
+    const y =
+      1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-a * a);
+    return sign * y;
+  };
+
+  // 光の点(ガウスビーム、半径 w)の中心が、受光器の端から x の位置にあるとき、受光器に入る光の割合(0〜1)
+  const captured = (x: number, w: number): number => 0.5 * (1 + erf((Math.SQRT2 * x) / w));
+
+  const setup = (root: HTMLElement) => {
+    const slot = document.querySelector<HTMLElement>('[data-sim="mic"]');
+    if (slot && !slot.contains(root)) slot.appendChild(root);
+
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const freqIn = q<HTMLInputElement>("freq");
+    const ampIn = q<HTMLInputElement>("amp");
+    const posIn = q<HTMLInputElement>("pos");
+    const wIn = q<HTMLInputElement>("w");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+
+    const values = () => ({
+      freq: Number(freqIn.value),
+      amp: Number(ampIn.value),
+      pos: Number(posIn.value),
+      w: Number(wIn.value),
+    });
+
+    const draw = (time: number) => {
+      const { freq, amp, pos, w } = values();
+      q<HTMLOutputElement>("freq-out").value = String(freq);
+      q<HTMLOutputElement>("amp-out").value = amp.toFixed(2);
+      q<HTMLOutputElement>("pos-out").value = pos.toFixed(1);
+      q<HTMLOutputElement>("w-out").value = w.toFixed(1);
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "13px sans-serif";
+
+      // --- 左: 受光器と光の点 ---
+      const cx = 170; // 受光器の端の位置
+      const cy = 120;
+      const mm = 28; // 1 mm あたりの画素数
+      ctx.fillStyle = "#3a3a46";
+      ctx.fillRect(cx, 20, 150, 200);
+      const phase = (time / 1000) * 2 * Math.PI * 0.8; // 表示用にゆっくり揺らす
+      const sx = cx + (pos + amp * Math.sin(phase)) * mm;
+      const grad = ctx.createRadialGradient(sx, cy, 0, sx, cy, w * mm * 1.6);
+      grad.addColorStop(0, "rgba(255,70,50,0.95)");
+      grad.addColorStop(0.6, "rgba(255,70,50,0.35)");
+      grad.addColorStop(1, "rgba(255,70,50,0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 330, 240);
+      ctx.strokeStyle = "#e0e0e8";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + 0.5, 20);
+      ctx.lineTo(cx + 0.5, 220);
+      ctx.stroke();
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      ctx.fillText("受光器", cx + 100, 240);
+      ctx.fillText("(光が入らない側)", cx - 85, 240);
+
+      // --- 右: 波形(3周期ぶん) ---
+      const gl = 390;
+      const gr = W - 20;
+      const gt = 30;
+      const gb = 210;
+      ctx.strokeStyle = "#5a5a66";
+      ctx.strokeRect(gl + 0.5, gt + 0.5, gr - gl, gb - gt);
+      const n = gr - gl;
+      let min = 1;
+      let max = 0;
+      // もとの音
+      ctx.strokeStyle = "#6fb7ff";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const y = (gt + gb) / 2 - Math.sin((i / n) * 6 * Math.PI) * (gb - gt) * 0.2 * Math.min(1, amp / 0.5 + 0.2);
+        if (i === 0) ctx.moveTo(gl + i, y);
+        else ctx.lineTo(gl + i, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // 受光器の出力
+      ctx.strokeStyle = "#ffd84d";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const v = captured(pos + amp * Math.sin((i / n) * 6 * Math.PI), w);
+        if (v < min) min = v;
+        if (v > max) max = v;
+        const y = gb - 4 - v * (gb - gt - 8);
+        if (i === 0) ctx.moveTo(gl + i, y);
+        else ctx.lineTo(gl + i, y);
+      }
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "right";
+      ctx.fillText("100 %", gl - 6, gt + 10);
+      ctx.fillText("0 %", gl - 6, gb);
+      ctx.textAlign = "center";
+      ctx.fillText(`時間(3周期ぶん = ${((3 / freq) * 1000).toFixed(1)} ms)`, (gl + gr) / 2, gb + 22);
+
+      // 波形のゆがみ: 上半分と下半分の振れ幅の差から、おおまかに判定する
+      const mid = captured(pos, w);
+      const up = max - mid;
+      const down = mid - min;
+      const swing = max - min;
+      let comment: string;
+      if (amp === 0) comment = "音がないので、出力は一定です。";
+      else if (swing < 0.02) comment = "出力がほとんど変化しません。光の点が、受光器の端にかかっていません。";
+      else if (Math.abs(up - down) / swing > 0.25) comment = "波形がゆがんでいます。もとの音とは違う音色になります。";
+      else comment = "もとの音に近い、きれいな波形です。";
+      readout.textContent =
+        `音がないときに受光器に入る光の割合 = ${(mid * 100).toFixed(0)} % / 出力の振れ幅 = ${(swing * 100).toFixed(1)} %。${comment}`;
+    };
+
+    let last = 0;
+    const loop = (time: number) => {
+      // 1秒に約30回、描き直す
+      if (time - last > 33) {
+        last = time;
+        draw(time);
+      }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+
+    // 受光器の出力を、音として鳴らす
+    let audio: AudioContext | undefined;
+    q<HTMLButtonElement>("play").addEventListener("click", () => {
+      const { freq, amp, pos, w } = values();
+      audio ??= new AudioContext();
+      const rate = audio.sampleRate;
+      const buffer = audio.createBuffer(1, rate, rate);
+      const data = buffer.getChannelData(0);
+      const mid = captured(pos, w);
+      for (let i = 0; i < rate; i++) {
+        const v = captured(pos + amp * Math.sin((2 * Math.PI * freq * i) / rate), w) - mid;
+        // 鳴り始めと鳴り終わりを、なめらかにする
+        const fade = Math.min(1, i / 500, (rate - i) / 500);
+        data[i] = v * 0.5 * fade;
+      }
+      const node = audio.createBufferSource();
+      node.buffer = buffer;
+      node.connect(audio.destination);
+      node.start();
+    });
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="mic"]').forEach(setup);
+</script>

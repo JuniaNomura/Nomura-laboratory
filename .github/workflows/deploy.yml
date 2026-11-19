@@ -42,9 +42,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/content/publications
+          git add src/content/publications src/data/researchmap
           if ! git diff --cached --quiet; then
-            git commit -m "chore: researchmapから業績を同期"
+            git commit -m "chore: researchmapから業績・受賞・委員会を同期"
             git push
           else
             echo "業績に変更はありませんでした。"

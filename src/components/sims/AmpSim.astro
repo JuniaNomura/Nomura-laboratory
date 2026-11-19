@@ -1,0 +1,492 @@
+---
+// 光増幅シミュレーター(研究内容「高出力パルスレーザー」用)。
+// 3つの準位を持つ原子の列に、励起光と信号光を入れて、自然放出・誘導放出・反転分布・パルスによるエネルギーの取り出しを見る。
+// 研究テーマの frontmatter に simulator: "amp" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="amp">
+  <p class="sim__title">光増幅シミュレーター: ためたエネルギーを、光が光のまま受け取る</p>
+
+  <div class="sim__controls">
+    <label class="sim__field sim__field--wide">
+      <span>励起光の強さ: <output data-role="pump-out">0.60</output></span>
+      <input data-role="pump" type="range" min="0" max="1" step="0.01" value="0.6" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="signal">信号光を入れる</button>
+    <button type="button" data-role="pulse">パルスを入れる</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="430"
+    role="img"
+    aria-label="左に原子1個の3つのエネルギー準位、右上に原子の列を信号光の光子が通り抜けて検出器へ向かう様子、右下に中準位にいる原子の割合の時間変化"
+  ></canvas>
+  <p class="sim__caption">
+    左は、原子1個(右の列で、白い輪をつけた原子)の3つの準位です。緑の励起光を吸収した原子は、上準位に上がり、すぐに熱を出して中準位に下がります(無放射遷移)。中準位からは、励起光より周波数の低い光(赤)を出して、下準位に戻ります。右の列では、黄色く光っている原子が、中準位にいる原子です。信号光の光子(赤い波)は、下準位の原子に出会うと吸収され、中準位の原子に出会うと、そっくり同じ光子をもう1個生み出します(誘導放出)。この2つは、同じ確率で起きます。右下のグラフは、中準位にいる原子の割合の時間変化です。「パルスを入れる」は、光子6個をひとかたまりで送ります。信号光を止め、励起光を強くして、エネルギーを十分にためてから入れると、違いがよくわかります。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+
+  <p class="sim__caption">
+    実際の例: 光通信やこの研究室の光増幅器に使われるエルビウム添加光ファイバーは、波長980 nmの光で励起し、波長1550 nmの光を増幅します。中準位の寿命は約10ミリ秒と長く、励起のエネルギーをためておけます。励起していないエルビウム添加光ファイバーは、信号光を吸収して弱めてしまいます。なお、このシミュレーターでは、原子を24個に減らし、自然放出の光がたまたま信号と同じ向きに出て増幅される効果(雑音のもと)は省いています。
+  </p>
+</div>
+
+<script>
+  const N = 24; // 原子の数
+  const HOT = 12; // 準位の図に拡大して見せる原子
+  const INTERACT = 0.1; // 光子が原子1個と出会ったときに、吸収か誘導放出が起きる確率
+  const PUMP_RATE = 4; // 励起光の強さ1のとき、下準位の原子が1秒あたりに励起される割合
+  const DECAY_RATE = 1 / 1.5; // 中準位の原子が、1秒あたりに自然放出する割合
+  const SPEED = 300; // 光子の速さ(ピクセル/秒)
+  const SIGNAL_RATE = 3; // 信号光の光子の数(1秒あたり)
+  const PULSE = 6; // パルス1つに含まれる光子の数
+  const WINDOW = 8; // 増幅の倍率を数える時間(秒)
+  const HISTORY = 20; // グラフに表示する時間(秒)
+
+  // 0: 下準位、1: 中準位、2: 上準位(励起された直後。すぐ中準位に下がる)
+  type Level = 0 | 1 | 2;
+  interface Photon {
+    x: number;
+    lane: number;
+    pulse: boolean;
+  }
+
+  const setup = (root: HTMLElement) => {
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const pumpIn = q<HTMLInputElement>("pump");
+    const signalBtn = q<HTMLButtonElement>("signal");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+
+    // 画面上の位置
+    const SRC = 315;
+    const DET = 850;
+    const ROW_Y = 125;
+    const FIRST = 345;
+    const GAP = (825 - FIRST) / (N - 1);
+    const atomX = (i: number) => FIRST + i * GAP;
+    const TRANSIT = (DET - SRC) / SPEED;
+
+    const level: Level[] = new Array(N).fill(0);
+    const upperTimer: number[] = new Array(N).fill(0);
+    const pumpFlash: number[] = new Array(N).fill(0);
+    let photons: Photon[] = [];
+    const glows: { x: number; y: number; vx: number; vy: number; age: number }[] = [];
+    let clock = 0;
+    let signalOn = false;
+    let signalTimer = 0;
+    let detectorFlash = 0;
+    let inTimes: number[] = [];
+    let outTimes: number[] = [];
+    const history: { t: number; f: number }[] = [];
+    // パルスの記録
+    let pulseOut = 0;
+    let pulseFlying = 0;
+    let pulsePending = false; // パルスが列の中を飛んでいるあいだ true
+    let pulseStored = 0; // パルスを入れた瞬間に、中準位にいた原子の数
+    let pulseResult = "";
+    let pulseResultAt = 0; // 結果を表示し始めた時刻(15秒たったら消す)
+    // 拡大している原子に、最後に起きたこと
+    let hotEvent = "";
+    let hotEventAge = 99;
+    let hotArrow: "pump" | "emit" | "absorb" | "" = "";
+
+    const note = (i: number, text: string, arrow: typeof hotArrow) => {
+      if (i !== HOT) return;
+      hotEvent = text;
+      hotEventAge = 0;
+      hotArrow = arrow;
+    };
+    const excitedCount = () => level.reduce<number>((a, v) => a + (v === 1 ? 1 : 0), 0);
+
+    const advance = (dt: number) => {
+      clock += dt;
+      hotEventAge += dt;
+      detectorFlash = Math.max(0, detectorFlash - dt * 5);
+      const pump = Number(pumpIn.value);
+
+      for (let i = 0; i < N; i++) {
+        pumpFlash[i] = Math.max(0, pumpFlash[i] - dt * 4);
+        if (level[i] === 0) {
+          if (Math.random() < pump * PUMP_RATE * dt) {
+            level[i] = 2;
+            upperTimer[i] = 0.35;
+            pumpFlash[i] = 1;
+            note(i, "励起光を吸収して、上準位へ。すぐに熱を出して、中準位に下がります", "pump");
+          }
+        } else if (level[i] === 2) {
+          upperTimer[i] -= dt;
+          if (upperTimer[i] <= 0) level[i] = 1;
+        } else if (Math.random() < DECAY_RATE * dt) {
+          // 自然放出: ばらばらの向きに光を出す
+          level[i] = 0;
+          const angle = ((30 + Math.random() * 120) * Math.PI) / 180;
+          const sign = Math.random() < 0.5 ? -1 : 1;
+          glows.push({ x: atomX(i), y: ROW_Y, vx: Math.cos(angle) * 160, vy: sign * Math.sin(angle) * 160, age: 0 });
+          note(i, "自然放出: 自分のタイミングで、ばらばらの向きに光を出しました", "emit");
+        }
+      }
+      for (const g of glows) {
+        g.x += g.vx * dt;
+        g.y += g.vy * dt;
+        g.age += dt;
+      }
+      while (glows.length && glows[0].age > 0.6) glows.shift();
+
+      // 信号光の光子を送る
+      if (signalOn) {
+        signalTimer -= dt;
+        if (signalTimer <= 0) {
+          signalTimer += 1 / SIGNAL_RATE;
+          photons.push({ x: SRC, lane: (Math.random() - 0.5) * 16, pulse: false });
+          inTimes.push(clock);
+        }
+      }
+
+      // 光子を進める。原子を通り過ぎるときに、吸収か誘導放出が起きることがある
+      const next: Photon[] = [];
+      for (const ph of photons) {
+        const from = ph.x;
+        const to = ph.x + SPEED * dt;
+        let alive = true;
+        for (let i = 0; i < N && alive; i++) {
+          const ax = atomX(i);
+          if (ax <= from || ax > to) continue;
+          if (level[i] === 2 || Math.random() >= INTERACT) continue;
+          if (level[i] === 0) {
+            level[i] = 1;
+            alive = false;
+            note(i, "吸収: 信号光の光子を吸収して、中準位へ上がりました", "absorb");
+          } else {
+            level[i] = 0;
+            const lane = Math.max(-14, Math.min(14, ph.lane + (Math.random() < 0.5 ? -6 : 6)));
+            next.push({ x: to, lane, pulse: ph.pulse });
+            if (ph.pulse) pulseFlying++;
+            note(i, "誘導放出: 通りかかった光子と、そっくり同じ光子を出しました", "emit");
+          }
+        }
+        if (!alive) {
+          if (ph.pulse) pulseFlying--;
+          continue;
+        }
+        ph.x = to;
+        if (ph.x >= DET) {
+          detectorFlash = 1;
+          if (ph.pulse) {
+            pulseOut++;
+            pulseFlying--;
+          } else {
+            outTimes.push(clock);
+          }
+          continue;
+        }
+        next.push(ph);
+      }
+      photons = next;
+      if (pulsePending && pulseFlying === 0) {
+        pulsePending = false;
+        pulseResultAt = clock;
+        const gained = pulseOut - PULSE;
+        pulseResult =
+          gained > 0
+            ? `パルス: 光子${PULSE}個を入れて、${pulseOut}個が出てきました。ためてあったエネルギー(中準位の原子${pulseStored}個)の一部を、一瞬で受け取りました。そのぶん中準位の原子が減り、たまり直すまでは、次のパルスをあまり増幅できません。`
+            : `パルス: 光子${PULSE}個を入れて、${pulseOut}個が出てきました。中準位の原子が${pulseStored}個しかなく、増やすより多く吸収されました。`;
+      }
+
+      inTimes = inTimes.filter((t) => clock - t < WINDOW + TRANSIT);
+      outTimes = outTimes.filter((t) => clock - t < WINDOW);
+      history.push({ t: clock, f: excitedCount() / N });
+      while (history.length && clock - history[0].t > HISTORY) history.shift();
+    };
+
+    // 光子(短い波のかたまり)。波の山の位置を場所で決めているので、同じ場所の光子は、波がぴったり重なる
+    const drawPhoton = (x: number, y: number) => {
+      ctx.beginPath();
+      for (let i = -12; i <= 12; i++) {
+        const envelope = Math.exp(-(i * i) / 50);
+        const py = y - Math.sin(((x + i) / 11) * 2 * Math.PI) * 6 * envelope;
+        if (i === -12) ctx.moveTo(x + i, py);
+        else ctx.lineTo(x + i, py);
+      }
+      ctx.stroke();
+    };
+
+    const arrow = (x: number, y1: number, y2: number, color: string, width: number) => {
+      const dir = y2 > y1 ? 1 : -1;
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(x, y1);
+      ctx.lineTo(x, y2 - dir * 8);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y2);
+      ctx.lineTo(x - 6, y2 - dir * 10);
+      ctx.lineTo(x + 6, y2 - dir * 10);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    const draw = () => {
+      const pump = Number(pumpIn.value);
+      q<HTMLOutputElement>("pump-out").value = pump.toFixed(2);
+      const excited = excitedCount();
+      const fraction = excited / N;
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, canvas.height);
+      ctx.font = "13px sans-serif";
+      ctx.textBaseline = "alphabetic";
+
+      // --- 左: 3つの準位 ---
+      const TOP = 60;
+      const MID = 115;
+      const LOW = 195;
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      ctx.fillText("原子1個のエネルギー準位", 135, 18);
+      ctx.fillText("(白い輪の原子)", 135, 35);
+      ctx.fillStyle = "#8a8a96";
+      ctx.fillRect(50, TOP - 1, 160, 2);
+      ctx.fillStyle = "#ffd84d";
+      ctx.fillRect(50, MID - 1, 160, 2);
+      ctx.fillStyle = "#c8c8d0";
+      ctx.fillRect(50, LOW - 1, 160, 2);
+      ctx.textAlign = "left";
+      ctx.fillText("上準位", 216, TOP + 4);
+      ctx.fillText("中準位", 216, MID + 4);
+      ctx.fillText("下準位", 216, LOW + 4);
+      const fresh = hotEventAge < 0.8;
+      // 励起光(緑): 下準位 → 上準位
+      arrow(75, LOW - 3, TOP + 2, fresh && hotArrow === "pump" ? "#7cfc8a" : "rgba(124, 252, 138, 0.35)", 2.5);
+      // 無放射遷移(波線): 上準位 → 中準位
+      ctx.strokeStyle = fresh && hotArrow === "pump" ? "#c8c8d0" : "rgba(200, 200, 208, 0.4)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let y = TOP + 3; y <= MID - 3; y++) {
+        const x = 170 + Math.sin((y - TOP) / 2.2) * 4;
+        if (y === TOP + 3) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // 信号と同じ周波数の光(赤): 中準位 → 下準位(放出)、または 下準位 → 中準位(吸収)
+      const red = fresh && (hotArrow === "emit" || hotArrow === "absorb") ? "#ff6e5a" : "rgba(255, 110, 90, 0.35)";
+      if (fresh && hotArrow === "absorb") arrow(125, LOW - 3, MID + 2, red, 2.5);
+      else arrow(125, MID + 3, LOW - 2, red, 2.5);
+      ctx.fillStyle = "#7cfc8a";
+      ctx.textAlign = "center";
+      ctx.fillText("励起光", 75, LOW + 20);
+      ctx.fillStyle = "#ff6e5a";
+      ctx.fillText("信号と同じ光", 140, LOW + 20);
+      ctx.fillStyle = "#8a8a96";
+      ctx.textAlign = "left";
+      ctx.fillText("熱", 180, (TOP + MID) / 2 + 4);
+      // 電子
+      const hotLevel = level[HOT];
+      ctx.fillStyle = "#6fb7ff";
+      ctx.beginPath();
+      ctx.arc(105, hotLevel === 2 ? TOP : hotLevel === 1 ? MID : LOW, 7, 0, 2 * Math.PI);
+      ctx.fill();
+      // 拡大している原子に、最後に起きたこと
+      if (hotEventAge < 4) {
+        ctx.fillStyle = `rgba(200, 200, 208, ${Math.min(1, 4 - hotEventAge)})`;
+        ctx.textAlign = "left";
+        // 準位の図の幅に収まるように、折り返して書く
+        let line = "";
+        let y = 250;
+        for (const ch of hotEvent) {
+          if (ctx.measureText(line + ch).width > 285) {
+            ctx.fillText(line, 20, y);
+            line = "";
+            y += 20;
+          }
+          line += ch;
+        }
+        ctx.fillText(line, 20, y);
+      }
+
+      // --- 右上: 原子の列 ---
+      // 励起光(上から、列の全体に当てている)
+      ctx.fillStyle = `rgba(124, 252, 138, ${0.15 + 0.75 * pump})`;
+      ctx.fillRect(FIRST - 12, 48, 825 - FIRST + 24, 5);
+      ctx.fillStyle = "#7cfc8a";
+      ctx.textAlign = "left";
+      ctx.fillText("励起光(列の全体に当てています)", FIRST - 12, 40);
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      ctx.fillText("信号光", SRC - 12, ROW_Y - 28);
+      ctx.fillText("検出器", DET + 12, ROW_Y - 28);
+      ctx.fillStyle = signalOn ? "#8a3a30" : "#3a3a46";
+      ctx.fillRect(SRC - 25, ROW_Y - 16, 25, 32);
+      ctx.fillStyle = detectorFlash > 0 ? `rgba(255, 110, 90, ${0.3 + 0.7 * detectorFlash})` : "#3a3a46";
+      ctx.fillRect(DET, ROW_Y - 20, 25, 40);
+
+      for (let i = 0; i < N; i++) {
+        const x = atomX(i);
+        if (pumpFlash[i] > 0) {
+          ctx.strokeStyle = `rgba(124, 252, 138, ${pumpFlash[i]})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x, 53);
+          ctx.lineTo(x, ROW_Y - 10);
+          ctx.stroke();
+        }
+        if (level[i] === 1) {
+          const grad = ctx.createRadialGradient(x, ROW_Y, 3, x, ROW_Y, 17);
+          grad.addColorStop(0, "rgba(255, 216, 77, 0.7)");
+          grad.addColorStop(1, "rgba(255, 216, 77, 0)");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(x, ROW_Y, 17, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        ctx.fillStyle = level[i] === 1 ? "#ffd84d" : level[i] === 2 ? "#7cfc8a" : "#2a3550";
+        ctx.strokeStyle = i === HOT ? "#ffffff" : "#5a6a8a";
+        ctx.lineWidth = i === HOT ? 2.5 : 1;
+        ctx.beginPath();
+        ctx.arc(x, ROW_Y, 7, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      }
+      for (const g of glows) {
+        ctx.fillStyle = `rgba(255, 110, 90, ${Math.max(0, 1 - g.age / 0.6)})`;
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, 3.5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      ctx.strokeStyle = "#ff6e5a";
+      ctx.lineWidth = 1.8;
+      for (const ph of photons) drawPhoton(ph.x, ROW_Y + ph.lane);
+
+      // 凡例
+      ctx.textAlign = "left";
+      const legend: [string, string][] = [
+        ["#2a3550", "下準位の原子(信号光を吸収する)"],
+        ["#ffd84d", "中準位の原子(信号光を増やす)"],
+      ];
+      legend.forEach(([color, text], i) => {
+        const lx = FIRST - 12 + i * 265;
+        ctx.fillStyle = color;
+        ctx.strokeStyle = "#5a6a8a";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(lx + 6, 184, 6, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#c8c8d0";
+        ctx.fillText(text, lx + 18, 189);
+      });
+
+      // --- 右下: 中準位にいる原子の割合の時間変化 ---
+      const gl = 345;
+      const gr = W - 30;
+      const gt = 245;
+      const gb = 390;
+      const yOf = (f: number) => gb - f * (gb - gt);
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(gl + 0.5, gt + 0.5, gr - gl, gb - gt);
+      // 半分より上は、増幅できる領域
+      ctx.fillStyle = "rgba(255, 216, 77, 0.08)";
+      ctx.fillRect(gl + 1, gt + 1, gr - gl - 1, yOf(0.5) - gt - 1);
+      ctx.strokeStyle = "#ffd84d";
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(gl, yOf(0.5));
+      ctx.lineTo(gr, yOf(0.5));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText(`中準位にいる原子の割合(いま ${excited} / ${N}個)`, gl, gt - 10);
+      ctx.fillStyle = "#ffd84d";
+      ctx.fillText("半分より上: 信号光が増える(反転分布)", gl + 8, gt + 18);
+      ctx.fillStyle = "#8a8a96";
+      ctx.fillText("半分より下: 信号光が減る", gl + 8, gb - 8);
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "right";
+      ctx.fillText("100%", gl - 6, gt + 10);
+      ctx.fillText("50%", gl - 6, yOf(0.5) + 4);
+      ctx.fillText("0%", gl - 6, gb);
+      ctx.fillText("時間 →", gr, gb + 20);
+      ctx.strokeStyle = "#6fb7ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      history.forEach((h, i) => {
+        const x = gr - ((clock - h.t) / HISTORY) * (gr - gl);
+        if (i === 0) ctx.moveTo(x, yOf(h.f));
+        else ctx.lineTo(x, yOf(h.f));
+      });
+      ctx.stroke();
+
+      // --- 説明 ---
+      const sentCount = inTimes.filter((t) => clock - t >= TRANSIT).length;
+      const gotCount = outTimes.length;
+      let text: string;
+      if (!signalOn) {
+        text =
+          pump === 0
+            ? "励起光も信号光も入れていません。原子は、すべて下準位にいます。"
+            : "信号光を入れていません。励起された原子は、それぞれのタイミングで、ばらばらの向きに光を出して下準位に戻ります(自然放出)。光は増えません。";
+      } else if (sentCount < 8) {
+        text = "信号光を入れました。光子の数を数えています…";
+      } else {
+        const gain = gotCount / sentCount;
+        const state =
+          gain > 1.1
+            ? "信号光は、誘導放出で増幅されています。"
+            : gain < 0.9
+              ? "信号光は、増えるより多く吸収されて、弱くなっています。励起光を強くして、中準位の原子を半分より多くする必要があります。"
+              : "増える数と吸収される数が、ほぼつり合っています。";
+        text = `直近${WINDOW}秒: 入った光子 ${sentCount}個 → 出てきた光子 ${gotCount}個(約${gain.toFixed(1)}倍)。${state}`;
+      }
+      readout.textContent = pulseResult && clock - pulseResultAt < 15 ? `${text} ${pulseResult}` : text;
+    };
+
+    let last = 0;
+    const loop = (time: number) => {
+      // 折りたたまれて見えていない間は、計算を止める
+      if (root.offsetParent !== null) {
+        const dt = Math.min(0.05, last ? (time - last) / 1000 : 0);
+        advance(dt);
+        draw();
+      }
+      last = time;
+      requestAnimationFrame(loop);
+    };
+
+    pumpIn.addEventListener("input", draw);
+    signalBtn.addEventListener("click", () => {
+      signalOn = !signalOn;
+      signalBtn.textContent = signalOn ? "信号光を止める" : "信号光を入れる";
+      signalTimer = 0;
+      inTimes = [];
+      outTimes = [];
+    });
+    q<HTMLButtonElement>("pulse").addEventListener("click", () => {
+      if (pulsePending) return; // 前のパルスが通り抜けるまで待つ
+      pulseStored = excitedCount();
+      pulseOut = 0;
+      pulseFlying = PULSE;
+      pulsePending = true;
+      pulseResult = "";
+      for (let i = 0; i < PULSE; i++) {
+        photons.push({ x: SRC - i * 9, lane: ((i * 7) % 23) - 11, pulse: true });
+      }
+    });
+    draw();
+    requestAnimationFrame(loop);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="amp"]').forEach(setup);
+</script>

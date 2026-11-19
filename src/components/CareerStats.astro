@@ -1,0 +1,71 @@
+---
+// 卒業生の進路の集計(業種別・職種別の割合)。個人と紐づかない形で表示する。
+// 元データは src/data/careers.yaml。「進路と就職活動」のページ(src/content/guides/career.md)の本文中に
+// <div data-careers></div> と書くと、その位置に表示される。
+import { loadYaml } from "../utils/data";
+
+interface CareerEntry {
+  kind?: string;
+  name?: string;
+  industry?: string;
+  jobType?: string;
+}
+
+const careers = loadYaml<{ entries?: CareerEntry[] }>("src/data/careers.yaml", {}).entries ?? [];
+const total = careers.length;
+
+// 進学は、業種・職種ともに「進学」として数える
+function tally(pick: (e: CareerEntry) => string | undefined) {
+  const counts = new Map<string, number>();
+  for (const e of careers) {
+    const key = e.kind === "進学" ? "進学" : pick(e) || "その他";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => ({ label, percent: Math.round((count / total) * 100) }));
+}
+const groups =
+  total > 0
+    ? [
+        { title: "業種別", rows: tally((e) => e.industry) },
+        { title: "職種別", rows: tally((e) => e.jobType) },
+      ]
+    : [];
+---
+
+<div data-careers-root>
+  {total === 0 ? (
+    <p>進路の集計は準備中です。</p>
+  ) : (
+    <>
+      <p class="stat-note">
+        集計対象: {total}件(個人は特定できない形で集計しています)
+        {total < 10 && " / 件数が少ないため、割合は参考値です"}
+      </p>
+      {groups.map((group) => (
+        <>
+          <h4>{group.title}</h4>
+          <ul class="stat-list">
+            {group.rows.map((row) => (
+              <li>
+                <span class="stat-list__label">{row.label}</span>
+                <span class="stat-list__bar">
+                  <span style={`width: ${row.percent}%`} />
+                </span>
+                <span class="stat-list__value">{row.percent}%</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ))}
+    </>
+  )}
+</div>
+
+<script>
+  // 本文中に置き場所(<div data-careers>)があれば、そこへ移動する
+  const root = document.querySelector<HTMLElement>("[data-careers-root]");
+  const slot = document.querySelector<HTMLElement>("[data-careers]");
+  if (root && slot) slot.appendChild(root);
+</script>

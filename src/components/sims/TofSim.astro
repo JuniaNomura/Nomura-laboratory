@@ -1,0 +1,214 @@
+---
+// ToF(Time of Flight)距離計測シミュレーター(お試し課題「ToFレーザーセンサー」用)。
+// 本文(Markdown)の中に <div data-sim="tof"></div> と書くと、その位置に表示される。
+---
+
+<div class="sim" data-sim-root="tof">
+  <p class="sim__title">ToF距離計測シミュレーター</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>ターゲットまでの距離 R: <output data-role="r-out">10</output> m</span>
+      <input data-role="r" type="range" min="1" max="100" step="0.5" value="10" />
+    </label>
+    <label class="sim__field">
+      <span>ターゲットの反射率 ρ: <output data-role="rho-out">50</output> %</span>
+      <input data-role="rho" type="range" min="5" max="90" step="5" value="50" />
+    </label>
+    <label class="sim__field">
+      <span>受光レンズの直径 D: <output data-role="d-out">20</output> mm</span>
+      <input data-role="d" type="range" min="5" max="50" step="1" value="20" />
+    </label>
+    <label class="sim__field">
+      <span>雑音の大きさ: <output data-role="noise-out">10</output> nW</span>
+      <input data-role="noise" type="range" min="1" max="100" step="1" value="10" />
+    </label>
+    <label class="sim__field">
+      <span>平均する回数 N</span>
+      <select data-role="avg">
+        <option value="1">1回(平均しない)</option>
+        <option value="10">10回</option>
+        <option value="100">100回</option>
+        <option value="1000">1000回</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="again">もう一度測る</button>
+  </div>
+
+  <canvas data-role="canvas" width="900" height="260" role="img" aria-label="光パルスを送ってから、反射光が戻ってくるまでの受信信号の波形"
+  ></canvas>
+  <p class="sim__caption">
+    横軸は、光パルスを送ってからの時間です。黄色の線が受信した信号(雑音を含む)、白い破線が本当の反射光が戻る時刻、赤い三角が、信号がいちばん大きくなった時刻(センサーが「ここだ」と判断した時刻)です。送信パルスは、ピークパワー1 W、幅5 nsとしています。縦軸の目盛りは、信号の大きさに合わせて自動で変わります。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  const C = 299792458; // 光速 [m/s]
+  const PT = 1; // 送信ピークパワー [W]
+  const FWHM = 5; // パルス幅 [ns]
+  const T_MAX = 700; // 表示する時間の範囲 [ns]
+  const SKIP = 4; // 送信直後(ここまでの時間)は、ピーク探しから除く [ns]
+
+  // 正規分布の乱数(ボックス=ミュラー法)
+  const gauss = (): number => {
+    const u = 1 - Math.random();
+    const v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+
+  // パワー[W]を、読みやすい単位で表す
+  const fmtPower = (w: number): string => {
+    if (w >= 1e-3) return `${(w * 1e3).toPrecision(3)} mW`;
+    if (w >= 1e-6) return `${(w * 1e6).toPrecision(3)} µW`;
+    return `${(w * 1e9).toPrecision(3)} nW`;
+  };
+
+  const setup = (root: HTMLElement) => {
+    const slot = document.querySelector<HTMLElement>('[data-sim="tof"]');
+    if (slot && !slot.contains(root)) slot.appendChild(root);
+
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const rIn = q<HTMLInputElement>("r");
+    const rhoIn = q<HTMLInputElement>("rho");
+    const dIn = q<HTMLInputElement>("d");
+    const noiseIn = q<HTMLInputElement>("noise");
+    const avgIn = q<HTMLSelectElement>("avg");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const LEFT = 20;
+    const RIGHT = W - 20;
+    const BASE = H - 70; // 信号0の高さ
+    const TOP = 30;
+    const xOf = (ns: number) => LEFT + (ns / T_MAX) * (RIGHT - LEFT);
+
+    const draw = () => {
+      const R = Number(rIn.value);
+      const rho = Number(rhoIn.value) / 100;
+      const D = Number(dIn.value) / 1000; // m
+      const sigma1 = Number(noiseIn.value) * 1e-9; // 1回の測定での雑音 [W]
+      const N = Number(avgIn.value);
+      q<HTMLOutputElement>("r-out").value = String(R);
+      q<HTMLOutputElement>("rho-out").value = String(Math.round(rho * 100));
+      q<HTMLOutputElement>("d-out").value = String(Math.round(D * 1000));
+      q<HTMLOutputElement>("noise-out").value = noiseIn.value;
+
+      // ライダー方程式(広い面で乱反射するターゲット): Pr = Pt ρ A / (π R²)
+      const area = Math.PI * (D / 2) ** 2;
+      const pr = (PT * rho * area) / (Math.PI * R * R);
+      const tTrue = ((2 * R) / C) * 1e9; // 往復時間 [ns]
+      const sigma = sigma1 / Math.sqrt(N); // N回平均した後の雑音
+      const s = FWHM / 2.3548; // ガウス波形の標準偏差 [ns]
+
+      // 1 ns刻みで受信波形をつくる
+      const wave = new Float64Array(T_MAX + 1);
+      let iMax = SKIP;
+      for (let t = 0; t <= T_MAX; t++) {
+        wave[t] = pr * Math.exp(-0.5 * ((t - tTrue) / s) ** 2) + sigma * gauss();
+        if (t >= SKIP && wave[t] > wave[iMax]) iMax = t;
+      }
+      const rEst = (iMax * 1e-9 * C) / 2;
+
+      // 描画
+      const full = Math.max(pr, 4 * sigma) * 1.15;
+      const yOf = (p: number) => BASE - (p / full) * (BASE - TOP);
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+
+      // 時間の目盛り(下に、対応する距離も書く)
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.strokeStyle = "#5a5a66";
+      ctx.fillStyle = "#c8c8d0";
+      ctx.beginPath();
+      ctx.moveTo(LEFT, BASE + 0.5);
+      ctx.lineTo(RIGHT, BASE + 0.5);
+      ctx.stroke();
+      for (let t = 0; t <= T_MAX; t += 100) {
+        const x = xOf(t);
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, BASE);
+        ctx.lineTo(x + 0.5, BASE + 6);
+        ctx.stroke();
+        ctx.fillText(`${t} ns`, x, BASE + 22);
+        ctx.fillText(`(${((t * 1e-9 * C) / 2).toFixed(0)} m)`, x, BASE + 40);
+      }
+      ctx.textAlign = "left";
+      ctx.fillText("時間(かっこ内は、その時間に対応する距離)", LEFT, H - 8);
+
+      // 送信パルス(大きさは縮小して表示)
+      ctx.strokeStyle = "#6fb7ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let t = 0; t <= 20; t += 0.25) {
+        const y = BASE - 0.5 * (BASE - TOP) * Math.exp(-0.5 * (t / s) ** 2);
+        if (t === 0) ctx.moveTo(xOf(t), y);
+        else ctx.lineTo(xOf(t), y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = "#6fb7ff";
+      ctx.fillText("送信パルス(縮小して表示)", xOf(8), TOP + 60);
+
+      // 本当の戻り時刻
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(xOf(tTrue), TOP - 10);
+      ctx.lineTo(xOf(tTrue), BASE);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 受信波形
+      ctx.strokeStyle = "#ffd84d";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let t = 0; t <= T_MAX; t++) {
+        const y = Math.min(H - 50, Math.max(4, yOf(wave[t])));
+        if (t === 0) ctx.moveTo(xOf(t), y);
+        else ctx.lineTo(xOf(t), y);
+      }
+      ctx.stroke();
+
+      // 判定した時刻
+      const xe = xOf(iMax);
+      ctx.fillStyle = "#ff5a5a";
+      ctx.beginPath();
+      ctx.moveTo(xe, TOP - 2);
+      ctx.lineTo(xe - 7, TOP - 16);
+      ctx.lineTo(xe + 7, TOP - 16);
+      ctx.closePath();
+      ctx.fill();
+
+      const snr1 = pr / sigma1;
+      const snr = pr / sigma;
+      const err = rEst - R;
+      const verdict =
+        Math.abs(err) <= 0.5
+          ? "正しく測れています。"
+          : "雑音を反射光とまちがえています。SN比が足りません。";
+      readout.textContent =
+        `往復時間 2R/c = ${tTrue.toFixed(1)} ns / 受信パワー = ${fmtPower(pr)} / ` +
+        `SN比 = ${snr1.toFixed(snr1 < 10 ? 1 : 0)}(1回の測定)` +
+        (N > 1 ? ` → ${snr.toFixed(snr < 10 ? 1 : 0)}(${N}回平均)` : "") +
+        " / " +
+        `センサーが求めた距離 = ${rEst.toFixed(2)} m(本当の距離との差 ${err >= 0 ? "+" : ""}${err.toFixed(2)} m)。${verdict}`;
+    };
+
+    for (const el of [rIn, rhoIn, dIn, noiseIn]) el.addEventListener("input", draw);
+    avgIn.addEventListener("change", draw);
+    q<HTMLButtonElement>("again").addEventListener("click", draw);
+    draw();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="tof"]').forEach(setup);
+</script>

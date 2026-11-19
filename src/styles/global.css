@@ -220,6 +220,99 @@ h2 {
 .member-card__awards li {
   margin-bottom: 0.15rem;
 }
+
+/* 研究室で学ぶ */
+.notice {
+  background: var(--color-accent-bg);
+  border-left: 4px solid var(--color-accent);
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+}
+
+.info-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1.5rem;
+}
+
+.info-list dt {
+  font-weight: 700;
+}
+
+.info-list dd {
+  margin: 0;
+}
+
+.stat-note {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.stat-list {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.stat-list li {
+  display: grid;
+  grid-template-columns: 11rem 1fr 3rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+}
+
+.stat-list__bar {
+  display: block;
+  background: var(--color-accent-bg);
+  border-radius: 999px;
+  height: 0.7rem;
+  overflow: hidden;
+}
+
+.stat-list__bar > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.stat-list__value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.voice__photo {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 50%;
+  margin-bottom: 0.6rem;
+}
+
+.faq {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.6rem 0;
+}
+
+.faq summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+
+/* 下書きの目印(プレビュー時のみ表示される) */
+.badge-draft {
+  display: inline-block;
+  margin-left: 0.6rem;
+  padding: 0.05rem 0.6rem;
+  border-radius: 999px;
+  background: #fff3e0;
+  color: #8a4b00;
+  font-size: 0.7rem;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
 /* 業績一覧 */
 .pub-list {
   list-style: none;
@@ -270,4 +363,666 @@ h2 {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* 本文(Markdown)中の表。おすすめの本の一覧などで使う */
+article table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0 1.5rem;
+  font-size: 0.95rem;
+}
+
+article th,
+article td {
+  border: 1px solid var(--color-border);
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+article th {
+  background: var(--color-accent-bg);
+  white-space: nowrap;
+}
+
+article td:first-child {
+  width: 40%;
+}
+
+@media (max-width: 600px) {
+  article table,
+  article tbody,
+  article tr,
+  article td {
+    display: block;
+    width: 100%;
+  }
+
+  article thead {
+    display: none;
+  }
+
+  article tr {
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    margin-bottom: 0.75rem;
+  }
+
+  article td {
+    border: none;
+  }
+
+  article td:first-child {
+    width: 100%;
+    background: var(--color-accent-bg);
+  }
+}
+
+/* お試し課題のシミュレーター(src/components/sims/)で共通に使うスタイル */
+.sim {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  background: var(--color-bg);
+}
+
+.sim__title {
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+}
+
+.sim__controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.sim__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.sim__field select,
+.sim__field input {
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.sim__field select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.sim canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: #0b0b0f;
+}
+
+.sim__caption {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin: 0.5rem 0 0.75rem;
+}
+
+.sim__readout {
+  background: var(--color-accent-bg);
+  border-left: 4px solid var(--color-accent);
+  padding: 0.6rem 1rem;
+  margin: 0;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .sim__controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sim__field--wide {
+  grid-column: 1 / -1;
+}
+
+.sim__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sim button {
+  font-size: 0.95rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.sim button:hover {
+  background: var(--color-accent-bg);
+}
+
+.sim__scroll {
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+
+.sim__table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sim__table th,
+.sim__table td {
+  border: 1px solid var(--color-border);
+  padding: 0.25rem 0.5rem;
+}
+
+.sim__table th {
+  background: var(--color-accent-bg);
+  text-align: left;
+}
+
+.sim__table td.is-kept {
+  background: #e3f3e6;
+}
+
+.sim__table td.is-error {
+  background: #fbdcdc;
+  font-weight: 700;
+}
+
+/* 研究内容のページで、シミュレーターを折りたたんで表示する */
+.sim-toggle {
+  margin-top: 1rem;
+}
+
+.sim-toggle > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.sim-toggle .sim {
+  margin-top: 0.75rem;
+}
+
+.theme-challenge {
+  margin: 0.75rem 0 0;
+  font-size: 0.95rem;
+}
+
+/* ページ内の目次(「研究内容」「研究室で学ぶ」の先頭に置く) */
+.page-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+}
+
+.page-toc a {
+  display: inline-block;
+  padding: 0.3rem 0.9rem;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.page-toc a:hover {
+  background: var(--color-accent-bg);
+}
+
+.page-toc small {
+  color: var(--color-muted);
+  margin-left: 0.3rem;
+}
+
+/* 折りたたみ(題名と1行の紹介だけを見せて、クリックで本文を開く) */
+.fold-tools {
+  text-align: right;
+  margin: 1rem 0 0;
+}
+
+.fold-tools button {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.fold-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.fold {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  scroll-margin-top: 1rem;
+}
+
+.fold > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.15rem 1rem;
+  padding: 0.8rem 1.25rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fold > summary::after {
+  content: "\FF0B";
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.fold[open] > summary::after {
+  content: "\2212";
+}
+
+.fold > summary:hover {
+  background: var(--color-accent-bg);
+}
+
+.fold[open] > summary {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.fold__title {
+  grid-column: 1;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.fold__title .tag {
+  margin-left: 0.6rem;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.fold__summary {
+  grid-column: 1;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.fold__body {
+  padding: 0.25rem 1.25rem 1.25rem;
+}
+
+/* 見出しごと折りたたむ場合 */
+.fold--section {
+  margin-top: 0.6rem;
+}
+
+.fold--section .fold__title {
+  font-size: 1.1rem;
+}
+
+/* 案内カードを2列に並べて、縦の長さを抑える */
+.card-list--compact {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
+.card-list--compact .card {
+  padding: 0.9rem 1.1rem;
+}
+
+.card-list--compact .card__title {
+  font-size: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.card-list--compact .card__title a {
+  color: var(--color-accent);
+}
+
+.card-list--compact .card p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}
+
+/* 研究室の1年(src/components/YearCalendar.astro) */
+.year__filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.year__filter button {
+  font-size: 0.9rem;
+  padding: 0.2rem 0.8rem;
+  border: 1px solid var(--color-accent);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.year__filter button[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.year__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.year__row {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.year__month {
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  padding-top: 0.1rem;
+}
+
+.year__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.year__item,
+.year__key {
+  --kind: #8a8a96;
+  border-left: 4px solid var(--kind);
+  background: color-mix(in srgb, var(--kind) 10%, #fff);
+  border-radius: 4px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.9rem;
+  transition: opacity 0.15s;
+}
+
+.year__item small {
+  margin-left: 0.4rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.year__item.is-dim {
+  opacity: 0.2;
+}
+
+.year__item--research {
+  --kind: #1a4d8f;
+}
+
+.year__item--conference {
+  --kind: #1f7a4d;
+}
+
+.year__item--career {
+  --kind: #c46a00;
+}
+
+.year__item--exam {
+  --kind: #7a3fa0;
+}
+
+.year__none {
+  color: var(--color-muted);
+}
+
+.year__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+}
+
+.year__key {
+  font-size: 0.8rem;
+}
+
+/* ボタン風のリンク(見学・相談フォームなど) */
+.button {
+  display: inline-block;
+  padding: 0.7rem 1.4rem;
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.button:hover,
+.button:focus-visible {
+  filter: brightness(1.15);
+  text-decoration: none;
+}
+
+/* 教育・アウトリーチ */
+.teaching-meta {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+.teaching-materials {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.teaching-materials li {
+  padding: 0.25rem 0;
+}
+.teaching-type {
+  display: inline-block;
+  min-width: 5.5em;
+  margin-right: 0.5rem;
+  padding: 0 0.4rem;
+  border-radius: 4px;
+  background: var(--color-accent-bg);
+  color: var(--color-accent);
+  font-size: 0.8rem;
+  text-align: center;
+}
+.teaching-format {
+  margin-left: 0.3rem;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+.teaching-info {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 1rem 0 1.5rem;
+}
+.teaching-info dt {
+  color: var(--color-muted);
+}
+.teaching-info dd {
+  margin: 0;
+}
+
+/* 大見出しの下に小さく添える説明(例: 「研究室で学ぶ」の対象) */
+.page-subtitle {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--color-muted);
+  font-size: 1rem;
+  font-weight: normal;
+}
+
+/* メンバー: 教員の紹介(経歴・受賞・委員会) */
+.faculty-profile {
+  margin: 1.5rem 0 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+.faculty-profile h3 {
+  margin-top: 0;
+}
+.faculty-profile h4 {
+  margin: 1rem 0 0.4rem;
+}
+.faculty-profile__list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 1rem;
+  margin: 0.4rem 0 0;
+}
+.faculty-profile__list dt {
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+.faculty-profile__list dd {
+  margin: 0;
+}
+.faculty-profile__fold {
+  margin-top: 0.8rem;
+}
+.faculty-profile__fold summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+.faculty-profile__note {
+  margin: 1rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+@media (max-width: 600px) {
+  .faculty-profile__list {
+    grid-template-columns: 1fr;
+    gap: 0 0;
+  }
+  .faculty-profile__list dd {
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* トップページ: 研究室が大切にしている言葉 */
+.motto-list {
+  display: grid;
+  gap: 1rem;
+}
+.motto {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid var(--color-accent);
+  background: var(--color-accent-bg);
+  border-radius: 0 8px 8px 0;
+}
+.motto__quote {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: bold;
+  font-style: italic;
+  color: var(--color-accent);
+}
+.motto__author {
+  margin: 0.6rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+.motto__text {
+  margin: 0.6rem 0 0;
+}
+.motto__ref {
+  margin: 0.4rem 0 0;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+.motto__translation {
+  margin: 0.2rem 0 0;
+  font-weight: bold;
+}
+.faculty-profile__plain {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+
+/* 研究テーマの本文の小見出し(どんな技術？/この研究室では/しくみ/身につくこと) */
+.fold__body h4 {
+  margin: 1.2rem 0 0.3rem;
+  padding-left: 0.5rem;
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-accent);
+  font-size: 0.95rem;
+}
+.fold__body h4:first-child {
+  margin-top: 0.4rem;
+}
+
+/* よくある質問: 教員からの回答と、先輩たちの声 */
+.faq__block {
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0.9rem;
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-accent-bg);
+  border-radius: 0 6px 6px 0;
+}
+.faq__block p {
+  margin: 0.2rem 0;
+}
+.faq__block--voices {
+  border-left-color: #d39b5b;
+  background: #faf4ec;
+}
+.faq__label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+.faq__links {
+  font-size: 0.9rem;
+}
+.faq__voices {
+  margin: 0.2rem 0;
+  padding-left: 1.1rem;
+}
+.faq__voices li {
+  margin-bottom: 0.3rem;
+}
+.faq__who {
+  margin-left: 0.3rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
 }

@@ -1,0 +1,132 @@
+---
+// BB84プロトコル シミュレーター(お試し課題「量子暗号通信」用)。
+// 本文(Markdown)の中に <div data-sim="bb84"></div> と書くと、その位置に表示される。
+---
+
+<div class="sim" data-sim-root="bb84">
+  <p class="sim__title">BB84プロトコル シミュレーター</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>送る光子の数</span>
+      <select data-role="count">
+        <option value="16">16個</option>
+        <option value="100">100個</option>
+        <option value="1000" selected>1000個</option>
+        <option value="10000">10000個</option>
+      </select>
+    </label>
+    <label class="sim__field">
+      <span>盗聴者(イブ)が盗み見る割合: <output data-role="eve-out">0</output> %</span>
+      <input data-role="eve" type="range" min="0" max="100" step="10" value="0" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="send">光子を送る</button>
+  </div>
+
+  <div class="sim__scroll">
+    <table class="sim__table" data-role="table"></table>
+  </div>
+  <p class="sim__caption">
+    表は、はじめの16個の光子の記録です。偏光の向きは、↕(縦)と ↔(横)が「＋」の組、↗(右上がり45°)と ↘(右下がり45°)が「×」の組です。↕ と ↗ がビット0、↔ と ↘ がビット1を表します。緑のマスは、アリスとボブの基底が一致して、鍵として残ったビットです。赤のマスは、鍵として残ったのに、アリスとボブで値が食い違ったビットです。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  type Basis = 0 | 1; // 0: ＋(縦・横) / 1: ×(斜め)
+  type Bit = 0 | 1;
+  type Row = {
+    aBit: Bit;
+    aBasis: Basis;
+    eBasis: Basis | null; // イブが盗み見なかったときは null
+    bBasis: Basis;
+    bBit: Bit;
+  };
+
+  const coin = (): Bit => (Math.random() < 0.5 ? 0 : 1);
+  const BASIS_MARK = ["＋", "×"];
+  const POL = [
+    ["↕", "↔"],
+    ["↗", "↘"],
+  ];
+
+  // 偏光(basis, bit)の光子を、基底 m で測る。基底が同じなら結果は確実、違えば半々。
+  const measure = (basis: Basis, bit: Bit, m: Basis): Bit => (basis === m ? bit : coin());
+
+  const setup = (root: HTMLElement) => {
+    const slot = document.querySelector<HTMLElement>('[data-sim="bb84"]');
+    if (slot && !slot.contains(root)) slot.appendChild(root);
+
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const countIn = q<HTMLSelectElement>("count");
+    const eveIn = q<HTMLInputElement>("eve");
+    const table = q<HTMLTableElement>("table");
+    const readout = q<HTMLParagraphElement>("readout");
+
+    const run = () => {
+      const n = Number(countIn.value);
+      const eveRate = Number(eveIn.value) / 100;
+      q<HTMLOutputElement>("eve-out").value = eveIn.value;
+
+      const rows: Row[] = [];
+      let kept = 0;
+      let errors = 0;
+      let peeked = 0;
+      for (let i = 0; i < n; i++) {
+        const aBit = coin();
+        const aBasis = coin();
+        // 途中を飛んでいる光子の状態
+        let basis: Basis = aBasis;
+        let bit: Bit = aBit;
+        let eBasis: Basis | null = null;
+        if (Math.random() < eveRate) {
+          // イブは、でたらめな基底で測り、その結果と同じ偏光の光子を送り直す
+          eBasis = coin();
+          bit = measure(basis, bit, eBasis);
+          basis = eBasis;
+          peeked++;
+        }
+        const bBasis = coin();
+        const bBit = measure(basis, bit, bBasis);
+        if (aBasis === bBasis) {
+          kept++;
+          if (aBit !== bBit) errors++;
+        }
+        if (i < 16) rows.push({ aBit, aBasis, eBasis, bBasis, bBit });
+      }
+
+      // 表をつくる
+      const line = (head: string, cells: (r: Row) => string, cls?: (r: Row) => string) =>
+        `<tr><th>${head}</th>${rows.map((r) => `<td class="${cls ? cls(r) : ""}">${cells(r)}</td>`).join("")}</tr>`;
+      const keptCls = (r: Row) => (r.aBasis !== r.bBasis ? "" : r.aBit === r.bBit ? "is-kept" : "is-error");
+      table.innerHTML =
+        line("アリスのビット", (r) => String(r.aBit)) +
+        line("アリスの基底", (r) => BASIS_MARK[r.aBasis]) +
+        line("送った偏光", (r) => POL[r.aBasis][r.aBit]) +
+        line("イブの基底", (r) => (r.eBasis === null ? "" : BASIS_MARK[r.eBasis])) +
+        line("ボブの基底", (r) => BASIS_MARK[r.bBasis]) +
+        line("ボブの測定結果", (r) => String(r.bBit)) +
+        line("基底は一致?", (r) => (r.aBasis === r.bBasis ? "○" : "−")) +
+        line("残った鍵(ボブ)", (r) => (r.aBasis === r.bBasis ? String(r.bBit) : ""), keptCls);
+
+      const qber = kept > 0 ? (errors / kept) * 100 : 0;
+      let verdict: string;
+      if (errors === 0) verdict = "食い違いは見つかりませんでした。";
+      else verdict = "食い違いがあります。途中で誰かが光子を測った証拠です。この鍵は捨てます。";
+      readout.textContent =
+        `送った光子 ${n} 個 / イブが盗み見た光子 ${peeked} 個 / 基底が一致して残った鍵 ${kept} ビット / ` +
+        `そのうち、アリスとボブで食い違ったビット ${errors} 個(誤り率 ${qber.toFixed(1)} %)。${verdict}`;
+    };
+
+    q<HTMLButtonElement>("send").addEventListener("click", run);
+    countIn.addEventListener("change", run);
+    eveIn.addEventListener("input", run);
+    run();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="bb84"]').forEach(setup);
+</script>

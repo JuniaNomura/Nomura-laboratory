@@ -1,0 +1,485 @@
+---
+// 周波数安定化(フィードバック制御)シミュレーター(研究内容「狭線幅・周波数安定化・高出力連続発振レーザー」用)。
+// レーザー → 吸収セル → 光検出器 → サーボ回路 → レーザーの電流、というフィードバックループを図で見せ、
+// ループを開いた状態と閉じた状態を比べられるようにする。
+// 研究テーマの frontmatter に simulator: "lock" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="lock">
+  <p class="sim__title">周波数安定化シミュレーター: ふらつくレーザーを、原子の目印につなぎとめる</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>レーザーの電流のつまみ: <output data-role="knob-out">0.00</output></span>
+      <input data-role="knob" type="range" min="-4" max="4" step="0.05" value="-2.5" />
+    </label>
+    <label class="sim__field">
+      <span>サーボのゲイン(制御の強さ): <output data-role="gain-out">0.08</output></span>
+      <input data-role="gain" type="range" min="0" max="0.4" step="0.01" value="0.08" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="loop" aria-pressed="false">ループを閉じる(いまは開いている)</button>
+    <button type="button" data-role="kick">机をたたく</button>
+    <button type="button" data-role="room">室温を上げる</button>
+    <button type="button" data-role="pause">止める</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="500"
+    role="img"
+    aria-label="上に、レーザー、吸収セル、光検出器、サーボ回路をつなぐフィードバックループの図。左下に吸収線と誤差信号。右下に、レーザーの周波数のずれ、外乱によるずれ、サーボによる補正の時間変化"
+  ></canvas>
+  <p class="sim__caption">
+    上は、周波数を安定化する装置の流れです。レーザーの光(赤い点)を、原子の入った吸収セルに通し、光検出器で受けます。光検出器からは、レーザーの周波数が目印(吸収線の中心)より高いか低いかを表す、誤差信号(青い点)が出ます。サーボ回路は、誤差信号をもとに、レーザーの電流を足し引きする信号(緑の点)をつくります。レーザーの周波数は電流で変わるので、これで1周の輪(フィードバックループ)ができます。スイッチで、この輪を開いたり閉じたりできます。
+  </p>
+  <p class="sim__caption">
+    左下の黄色の線は吸収線、青い線は誤差信号の形、赤い縦線はいまのレーザーの周波数です。右下は時間変化で、赤がレーザーの周波数のずれ、灰色は制御がなかった場合のずれ(外乱とつまみによるもの)、緑はサーボが電流で打ち消した量です。赤 = 灰色 + 緑 になっています。目盛りは、吸収線の半分の幅を1とした、単位のない仮の値です。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+
+  <p class="sim__caption">
+    実際の例: 多くの半導体レーザーでは、電流を増やすと周波数が下がり、1 mAあたり数百 MHz〜1 GHz程度変わります。温度の影響はさらに大きく、1 ℃で数十 GHzも変わります。そのため、温度を一定に保つ制御でゆっくりした変化を抑え、速いふらつきを電流で打ち消すのが一般的です。光共振器の共鳴を目印にする場合も、同じ形の誤差信号をつくり、同じしくみで制御します。
+  </p>
+</div>
+
+<script>
+  const W = 900;
+  const H = 500;
+  const DELAY = 3; // 制御が効くまでの遅れ(ステップ数)
+  const HISTORY = 520; // 表示する履歴の長さ
+  const TUNING = -1; // 電流1あたりの周波数の変化(電流を増やすと周波数が下がる)
+  const SERVO_MAX = 6; // サーボ回路が出せる電流の限界
+  const ROOM_STEP = 2; // 「室温を上げる/下げる」で変わる周波数のずれ
+
+  const gauss = (): number => {
+    const u = 1 - Math.random();
+    const v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  };
+
+  // 誤差信号(分散型)。目印からのずれ x(吸収線の半分の幅を1とする)に対して、中心付近では x に比例する
+  const errorSignal = (x: number): number => (2 * x) / (1 + x * x);
+
+  // ブロック図の位置
+  const LASER = { x: 30, y: 36, w: 170, h: 78 };
+  const CELL = { x: 330, y: 36, w: 170, h: 78 };
+  const PD = { x: 630, y: 36, w: 170, h: 78 };
+  const SERVO = { x: 330, y: 146, w: 170, h: 52 };
+  const WIRE_Y = SERVO.y + SERVO.h / 2;
+  const SWITCH_X = 230; // サーボからレーザーへの線の途中にあるスイッチ
+  type Pt = [number, number];
+  const BEAM: Pt[] = [
+    [LASER.x + LASER.w, 75],
+    [PD.x, 75],
+  ];
+  const ERR_WIRE: Pt[] = [
+    [PD.x + PD.w / 2, PD.y + PD.h],
+    [PD.x + PD.w / 2, WIRE_Y],
+    [SERVO.x + SERVO.w, WIRE_Y],
+  ];
+  const SERVO_WIRE: Pt[] = [
+    [SERVO.x, WIRE_Y],
+    [LASER.x + 80, WIRE_Y],
+    [LASER.x + 80, LASER.y + LASER.h],
+  ];
+
+  // 折れ線の上で、全長に対する割合 u の位置
+  const along = (path: Pt[], u: number): Pt => {
+    const lens: number[] = [];
+    let total = 0;
+    for (let i = 1; i < path.length; i++) {
+      const l = Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
+      lens.push(l);
+      total += l;
+    }
+    let d = u * total;
+    for (let i = 1; i < path.length; i++) {
+      if (d <= lens[i - 1]) {
+        const r = d / lens[i - 1];
+        return [path[i - 1][0] + r * (path[i][0] - path[i - 1][0]), path[i - 1][1] + r * (path[i][1] - path[i - 1][1])];
+      }
+      d -= lens[i - 1];
+    }
+    return path[path.length - 1];
+  };
+
+  const setup = (root: HTMLElement) => {
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const knobIn = q<HTMLInputElement>("knob");
+    const gainIn = q<HTMLInputElement>("gain");
+    const loopBtn = q<HTMLButtonElement>("loop");
+    const roomBtn = q<HTMLButtonElement>("room");
+    const pauseBtn = q<HTMLButtonElement>("pause");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let step = 0;
+    let walk = 0; // でたらめなふらつき
+    let kick = 0; // 机をたたいたときのずれ
+    let room = 0; // 室温の変化によるずれ(目標)
+    let roomNow = 0; // 室温の変化によるずれ(ゆっくり目標に近づく)
+    let servo = 0; // サーボ回路が足し引きしている電流
+    let closed = false;
+    let running = true;
+    let flow = 0; // 点を流すための位相
+    const errors: number[] = new Array(DELAY + 1).fill(0);
+    // 履歴: [周波数のずれ, 制御がなかった場合のずれ, サーボによる補正]
+    const history: [number, number, number][] = [];
+    let lastErr = 0;
+
+    const advance = () => {
+      const gain = Number(gainIn.value);
+      const knob = Number(knobIn.value);
+      step++;
+      // 外乱: ゆっくりした変動 + でたらめなふらつき + たたいたときのずれ + 室温の変化
+      walk = walk * 0.995 + 0.03 * gauss();
+      kick *= 0.992;
+      roomNow += (room - roomNow) * 0.004;
+      const disturbance = 0.8 * Math.sin(step / 70) + walk + kick + roomNow;
+      const open = disturbance + TUNING * knob; // 制御がなかった場合のずれ
+      const correction = closed ? TUNING * servo : 0;
+      const freq = open + correction; // 目印からのずれ
+      errors.push(errorSignal(freq) + 0.01 * gauss());
+      const delayed = errors.shift() ?? 0;
+      lastErr = delayed;
+      if (closed) {
+        // 積分制御: 誤差を足し込んで、ずれを打ち消す向きに電流を動かす(電流を増やすと周波数が下がるので、+)
+        servo = Math.max(-SERVO_MAX, Math.min(SERVO_MAX, servo + gain * delayed));
+      }
+      history.push([freq, open, correction]);
+      if (history.length > HISTORY) history.shift();
+    };
+
+    const box = (b: { x: number; y: number; w: number; h: number }, title: string, lines: [string, string][]) => {
+      ctx.fillStyle = "#151a24";
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(b.x + 0.5, b.y + 0.5, b.w, b.h);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#e6e9ef";
+      ctx.font = "bold 13px sans-serif";
+      ctx.fillText(title, b.x + b.w / 2, b.y + 18);
+      ctx.font = "12px sans-serif";
+      lines.forEach(([text, color], i) => {
+        ctx.fillStyle = color;
+        ctx.fillText(text, b.x + b.w / 2, b.y + 36 + i * 17);
+      });
+      ctx.textAlign = "left";
+    };
+
+    const polyline = (path: Pt[], color: string, width = 2) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      path.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+      ctx.stroke();
+    };
+    const arrowHead = (to: Pt, from: Pt, color: string) => {
+      const ang = Math.atan2(to[1] - from[1], to[0] - from[0]);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(to[0], to[1]);
+      ctx.lineTo(to[0] - 10 * Math.cos(ang - 0.45), to[1] - 10 * Math.sin(ang - 0.45));
+      ctx.lineTo(to[0] - 10 * Math.cos(ang + 0.45), to[1] - 10 * Math.sin(ang + 0.45));
+      ctx.closePath();
+      ctx.fill();
+    };
+    const dots = (path: Pt[], color: string, count: number, from = 0, to = 1) => {
+      ctx.fillStyle = color;
+      for (let k = 0; k < count; k++) {
+        const u = (flow + k / count) % 1;
+        if (u < from || u > to) continue;
+        const [x, y] = along(path, u);
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
+    const drawLoop = (freq: number, knob: number) => {
+      // 光の通り道
+      polyline(BEAM, "rgba(255, 90, 90, 0.35)", 6);
+      dots(BEAM, "#ff6b6b", 10);
+      // 誤差信号の線
+      polyline(ERR_WIRE, "#4f86c6");
+      arrowHead(ERR_WIRE[2], [ERR_WIRE[2][0] + 10, ERR_WIRE[2][1]], "#4f86c6");
+      dots(ERR_WIRE, "#6fb7ff", 6);
+      // サーボからレーザーへの線(スイッチ付き)
+      const sw0 = SWITCH_X + 22;
+      const sw1 = SWITCH_X - 22;
+      const green = closed ? "#4fc37a" : "#3b5444";
+      polyline([SERVO_WIRE[0], [sw0, WIRE_Y]], green);
+      polyline([[sw1, WIRE_Y], SERVO_WIRE[1], SERVO_WIRE[2]], green);
+      arrowHead(SERVO_WIRE[2], [SERVO_WIRE[2][0], SERVO_WIRE[2][1] + 10], green);
+      // スイッチの刃
+      ctx.strokeStyle = closed ? "#4fc37a" : "#e6e9ef";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(sw0, WIRE_Y);
+      if (closed) ctx.lineTo(sw1, WIRE_Y);
+      else ctx.lineTo(sw1 + 6, WIRE_Y - 24);
+      ctx.stroke();
+      ctx.fillStyle = "#e6e9ef";
+      for (const x of [sw0, sw1]) {
+        ctx.beginPath();
+        ctx.arc(x, WIRE_Y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = closed ? "#4fc37a" : "#e6e9ef";
+      ctx.fillText(closed ? "ループ: 閉じている" : "ループ: 開いている", SWITCH_X, WIRE_Y + 26);
+      ctx.textAlign = "left";
+      if (closed) dots(SERVO_WIRE, "#6fe39a", 6);
+      else dots(SERVO_WIRE, "#6fe39a", 6, 0, 0.3); // スイッチの手前で止まる
+
+      // ブロック
+      const high = freq > 0.05;
+      const low = freq < -0.05;
+      box(LASER, "レーザー", [
+        [`電流 = つまみ ${knob.toFixed(2)} + サーボ ${(closed ? servo : 0).toFixed(2)}`, "#cfd6e2"],
+        [`周波数のずれ: ${freq >= 0 ? "+" : "−"}${Math.abs(freq).toFixed(2)}`, "#ff8a8a"],
+      ]);
+      box(CELL, "吸収セル", [
+        ["原子が入っている", "#cfd6e2"],
+        ["吸収線の中心 = 目印", "#ffd84d"],
+      ]);
+      box(PD, "光検出器", [
+        ["誤差信号をつくる", "#cfd6e2"],
+        [
+          `誤差信号: ${lastErr >= 0 ? "+" : "−"}${Math.abs(lastErr).toFixed(2)}${high ? "(高すぎ)" : low ? "(低すぎ)" : ""}`,
+          "#6fb7ff",
+        ],
+      ]);
+      box(SERVO, "サーボ回路", [
+        [closed ? `電流を ${servo >= 0 ? "+" : "−"}${Math.abs(servo).toFixed(2)} 足す` : "出力はレーザーに届かない", "#6fe39a"],
+      ]);
+      ctx.fillStyle = "#8a93a3";
+      ctx.font = "12px sans-serif";
+      ctx.fillText("光", (LASER.x + LASER.w + CELL.x) / 2 - 6, 64);
+      ctx.fillText("光", (CELL.x + CELL.w + PD.x) / 2 - 6, 64);
+      ctx.fillText("誤差信号", PD.x + PD.w / 2 + 8, WIRE_Y - 6);
+      ctx.fillText("電流を足し引きする信号", SERVO.x - 150, WIRE_Y - 8);
+    };
+
+    const draw = () => {
+      const gain = Number(gainIn.value);
+      const knob = Number(knobIn.value);
+      q<HTMLOutputElement>("gain-out").value = gain.toFixed(2);
+      q<HTMLOutputElement>("knob-out").value = knob.toFixed(2);
+      const [freq] = history[history.length - 1] ?? [0, 0, 0];
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      drawLoop(freq, knob);
+      ctx.font = "13px sans-serif";
+
+      // --- 左下: 吸収線と誤差信号 ---
+      const al = 20;
+      const ar = 320;
+      const at = 262;
+      const ab = 470;
+      const X_MAX = 6;
+      const xOf = (x: number) => (al + ar) / 2 + (x / X_MAX) * ((ar - al) / 2);
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(al + 0.5, at + 0.5, ar - al, ab - at);
+      ctx.strokeStyle = "#ffd84d";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let px = al; px <= ar; px++) {
+        const x = ((px - (al + ar) / 2) / ((ar - al) / 2)) * X_MAX;
+        const y = at + 14 + (0.75 / (1 + x * x)) * 80;
+        if (px === al) ctx.moveTo(px, y);
+        else ctx.lineTo(px, y);
+      }
+      ctx.stroke();
+      const mid = ab - 55;
+      ctx.strokeStyle = "#3a3a46";
+      ctx.beginPath();
+      ctx.moveTo(al, mid + 0.5);
+      ctx.lineTo(ar, mid + 0.5);
+      ctx.stroke();
+      ctx.strokeStyle = "#6fb7ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let px = al; px <= ar; px++) {
+        const x = ((px - (al + ar) / 2) / ((ar - al) / 2)) * X_MAX;
+        const y = mid - errorSignal(x) * 42;
+        if (px === al) ctx.moveTo(px, y);
+        else ctx.lineTo(px, y);
+      }
+      ctx.stroke();
+      const fx = Math.min(ar - 2, Math.max(al + 2, xOf(freq)));
+      ctx.strokeStyle = "#ff5a5a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(fx, at);
+      ctx.lineTo(fx, ab);
+      ctx.stroke();
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      ctx.fillText("吸収線(黄)と誤差信号(青)", (al + ar) / 2, at - 10);
+      ctx.fillText("光の周波数 →", (al + ar) / 2, ab + 20);
+      ctx.fillStyle = "#6fb7ff";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("+(高すぎ)", ar - 62, mid - 30);
+      ctx.fillText("−(低すぎ)", al + 6, mid + 38);
+
+      // --- 右下: 時間変化 ---
+      const gl = 380;
+      const gr = W - 20;
+      const Y_MAX = 5;
+      const yOf = (v: number) => (at + ab) / 2 - (Math.max(-Y_MAX, Math.min(Y_MAX, v)) / Y_MAX) * ((ab - at) / 2);
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(gl + 0.5, at + 0.5, gr - gl, ab - at);
+      ctx.strokeStyle = "#ffd84d";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(gl, yOf(0));
+      ctx.lineTo(gr, yOf(0));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const trace = (k: 0 | 1 | 2, color: string, width: number) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        history.forEach((h, i) => {
+          const x = gl + (i / (HISTORY - 1)) * (gr - gl);
+          if (i === 0) ctx.moveTo(x, yOf(h[k]));
+          else ctx.lineTo(x, yOf(h[k]));
+        });
+        ctx.stroke();
+      };
+      trace(1, "rgba(170, 176, 190, 0.7)", 1.2);
+      trace(2, "#4fc37a", 1.4);
+      trace(0, "#ff5a5a", 1.8);
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      ctx.fillText("時間変化(破線が目印の周波数)", (gl + gr) / 2, at - 10);
+      ctx.fillText("時間 →", (gl + gr) / 2, ab + 20);
+      ctx.textAlign = "right";
+      ctx.fillText("高い", gl - 6, at + 12);
+      ctx.fillText("低い", gl - 6, ab - 2);
+      ctx.textAlign = "left";
+      ctx.font = "11px sans-serif";
+      ctx.fillStyle = "#ff8a8a";
+      ctx.fillText("赤: 周波数のずれ", gl + 8, ab - 40);
+      ctx.fillStyle = "#aab0be";
+      ctx.fillText("灰: 制御がなかった場合", gl + 8, ab - 24);
+      ctx.fillStyle = "#6fe39a";
+      ctx.fillText("緑: サーボによる補正", gl + 8, ab - 8);
+    };
+
+    // 直近のふらつきの大きさと、振動しているかの判定
+    const status = () => {
+      const recent = history.slice(-150).map((h) => h[0]);
+      const rms = Math.sqrt(recent.reduce((a, v) => a + v * v, 0) / Math.max(1, recent.length));
+      // 制御が強すぎるときの振動は、約14ステップの周期を持つ。半周期(7ステップ)ずらした波形との相関が
+      // 強い負の値になっていれば、振動していると判定する
+      const mean = recent.reduce((a, v) => a + v, 0) / Math.max(1, recent.length);
+      let num = 0;
+      let den = 0;
+      for (let i = 0; i < recent.length; i++) {
+        den += (recent[i] - mean) ** 2;
+        if (i >= 7) num += (recent[i] - mean) * (recent[i - 7] - mean);
+      }
+      return { rms, oscillating: den > 0 && num / den < -0.3, freq: recent[recent.length - 1] ?? 0 };
+    };
+
+    const updateText = () => {
+      const gain = Number(gainIn.value);
+      const { rms, oscillating, freq } = status();
+      let text: string;
+      if (!closed) {
+        text =
+          "ループが開いています。サーボ回路の出力はレーザーに届かず、レーザーの周波数は、外乱で勝手にふらつきます。電流のつまみを回すと、周波数が動きます(電流を増やすと、周波数が下がります)。誤差信号は、周波数が目印より高いと+、低いと−になります。";
+        text +=
+          Math.abs(freq) < 1
+            ? "いま、周波数は目印の近くにあります。「ループを閉じる」を押してみましょう。"
+            : "つまみで、周波数を目印(破線)の近くに合わせてから、「ループを閉じる」を押してください。";
+      } else if (gain === 0) {
+        text = "ループは閉じていますが、ゲインが0なので、サーボ回路は何もしません。ゲインを上げてください。";
+      } else if (Math.abs(servo) >= SERVO_MAX - 0.05) {
+        text =
+          "サーボ回路が出せる電流の限界に達して、目印から外れてしまいました。実際には、温度のようにゆっくり大きく変わるものは、別の制御(温度の制御)で抑えます。ループを開き、つまみで目印に合わせ直してから、閉じ直してください。";
+      } else if (oscillating) {
+        text =
+          "ゲインが大きすぎて、振動(発振)しています。誤差信号が電流に届くまでには遅れがあるので、強く直しすぎると、行き過ぎと戻り過ぎをくり返します。ゲインを下げてください。";
+      } else if (rms < 0.2) {
+        text = `目印の周波数に、しっかりつなぎとめられています(ロック)。ふらつきの大きさは ${rms.toFixed(2)} です。緑の線(サーボによる補正)が、灰色の線(制御がなかった場合のずれ)をちょうど打ち消しています。「机をたたく」「室温を上げる」を押しても、サーボが電流を変えて引き戻します。ロック中につまみを回しても、サーボが打ち消すので、周波数は変わりません。`;
+      } else if (Math.abs(freq) > 2.5) {
+        text =
+          "サーボ回路が、誤差信号をもとに電流を変えて、周波数を目印に引き寄せている途中です。目印から遠いところでは誤差信号が小さいので、引き寄せに時間がかかります。さらに遠いと、誤差信号がノイズに埋もれて、引き寄せられなくなります。そのため実際には、先につまみで目印の近くに合わせてから、ループを閉じます。";
+      } else if (rms < 0.6) {
+        text = `目印に引き寄せられていますが、ゲインが小さく、ふらつきが残っています(ふらつきの大きさ ${rms.toFixed(2)})。`;
+      } else {
+        text = `ゲインが小さすぎて、ふらつきを抑えきれていません(ふらつきの大きさ ${rms.toFixed(2)})。`;
+      }
+      readout.textContent = text;
+    };
+
+    let last = 0;
+    let textTimer = 0;
+    const loop = (time: number) => {
+      // 折りたたまれて見えていない間は、計算を止める
+      const visible = root.offsetParent !== null;
+      if (running && visible && time - last > 16) {
+        // 画面の描き直しが遅い環境でも同じ速さで進むよう、経過時間に応じて計算を進める(1秒あたり約120ステップ)
+        const steps = Math.min(40, Math.max(1, Math.round((time - last) / 8)));
+        const dt = (time - last) / 1000;
+        last = time;
+        for (let i = 0; i < steps; i++) advance();
+        flow = (flow + Math.min(0.1, dt) * 0.35) % 1;
+        draw();
+        textTimer += dt;
+        if (textTimer > 0.5) {
+          textTimer = 0;
+          updateText();
+        }
+      } else if (!running || !visible) {
+        last = time;
+      }
+      requestAnimationFrame(loop);
+    };
+
+    loopBtn.addEventListener("click", () => {
+      closed = !closed;
+      servo = 0; // 閉じるときは、サーボ回路の出力を0から始める
+      loopBtn.setAttribute("aria-pressed", String(closed));
+      loopBtn.textContent = closed ? "ループを開く(いまは閉じている)" : "ループを閉じる(いまは開いている)";
+      updateText();
+    });
+    gainIn.addEventListener("input", draw);
+    knobIn.addEventListener("input", draw);
+    q<HTMLButtonElement>("kick").addEventListener("click", () => {
+      kick += 3 * (Math.random() < 0.5 ? -1 : 1);
+    });
+    roomBtn.addEventListener("click", () => {
+      // 室温を上げると周波数が下がり、下げると戻る
+      room = room === 0 ? -ROOM_STEP : 0;
+      roomBtn.textContent = room === 0 ? "室温を上げる" : "室温を下げる";
+    });
+    pauseBtn.addEventListener("click", () => {
+      running = !running;
+      pauseBtn.textContent = running ? "止める" : "動かす";
+    });
+    for (let i = 0; i < HISTORY; i++) advance();
+    draw();
+    updateText();
+    requestAnimationFrame(loop);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="lock"]').forEach(setup);
+</script>

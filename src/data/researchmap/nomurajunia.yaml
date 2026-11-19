@@ -1,0 +1,47 @@
+# scripts/fetch-researchmap.mjs が researchmap から自動で作るファイルです。手で編集しないでください
+updated: '2026-11-18'
+awards:
+  - date: 2022年12月
+    name: 情報総研所長特別表彰, 三菱電機株式会社
+  - date: 2022年6月
+    name: 情報総研所長特別表彰
+    association: 三菱電機株式会社
+  - date: 2020年12月
+    name: 情報総研所長特別表彰
+    association: 三菱電機株式会社
+  - date: 2020年3月
+    name: 情報技術総合研究所 所長表彰
+    association: 三菱電機株式会社
+  - date: 2019年3月
+    name: 特に優れた業績による返還免除
+    association: 独立行政法人 日本学生支援機構
+  - date: 2019年3月
+    name: YNU CREATE AWARD
+    association: 横浜国立大学
+  - date: 2019年2月
+    name: 副学長表彰（感謝状授与）
+    association: 横浜国立大学
+committees:
+  - period: 2026年9月〜
+    name: プログラム委員会 カテゴリーD 委員
+    association: Advanced Lasers & Photon Sources（ALPS）
+  - period: 2026年4月〜
+    name: 第47回年次大会 B部門 プログラム委員
+    association: レーザー学会
+  - period: 2026年4月〜
+    name: 光学編集委員
+    association: 日本光学会
+  - period: 2025年7月〜2025年12月
+    name: OPJ2025プログラム委員
+    association: 日本光学会
+  - period: 2024年4月〜
+    name: 領域3.4プログラム委員
+    association: 応用物理学会
+  - period: 2023年9月〜2024年3月
+    name: 光無線給電に関する検討委員
+    association: 光産業技術振興協会
+  - period: 2023年8月〜2024年3月
+    name: 電子情報通信学会ビジネスインキュベーション分科会
+  - period: 2021年4月〜2021年5月
+    name: 量子情報技術特別研究専門委員会
+    association: 第44回量子情報技術研究会 (QIT44) 副委員長

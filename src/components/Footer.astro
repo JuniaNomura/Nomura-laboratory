@@ -1,5 +1,6 @@
 ---
 import { siteConfig } from "../config/site";
+import { isEmail } from "../utils/contact";
 
 const year = new Date().getFullYear();
 ---
@@ -10,7 +11,12 @@ const year = new Date().getFullYear();
       &copy; {year} {siteConfig.labNameJa}, {siteConfig.universityJa}
     </p>
     <p>
-      お問い合わせ: <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>
+      お問い合わせ:{" "}
+      {isEmail(siteConfig.contactEmail) ? (
+        <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>
+      ) : (
+        siteConfig.contactEmail
+      )}
     </p>
   </div>
 </footer>

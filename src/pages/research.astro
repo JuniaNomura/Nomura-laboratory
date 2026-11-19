@@ -1,36 +1,226 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
+import { getCollection, render } from "astro:content";
+import { withBase } from "../utils/url";
+import { loadYaml } from "../utils/data";
+import { loadLab } from "../utils/lab";
+import { isVisible } from "../utils/visibility";
+import ModeLockSim from "../components/sims/ModeLockSim.astro";
+import LidarSim from "../components/sims/LidarSim.astro";
+import LockSim from "../components/sims/LockSim.astro";
+import CombineSim from "../components/sims/CombineSim.astro";
+import AbsorptionSim from "../components/sims/AbsorptionSim.astro";
+import AmpSim from "../components/sims/AmpSim.astro";
+import EoCombSim from "../components/sims/EoCombSim.astro";
+import LifSim from "../components/sims/LifSim.astro";
+import CoolingSim from "../components/sims/CoolingSim.astro";
+import CombSim from "../components/sims/CombSim.astro";
+import HyperSim from "../components/sims/HyperSim.astro";
+import ExtractSim from "../components/sims/ExtractSim.astro";
+import FoldTools from "../components/FoldTools.astro";
 
-// このページは静的なテキストです。研究内容が変わったときは
-// 直接このファイルを編集してください(頻繁には更新しない想定)。
-const researchAreas = [
-  {
-    title: "研究テーマ1",
-    body: "研究テーマの概要をここに記載します。対象、アプローチ、応用先などを2〜4文程度で説明します。",
-  },
-  {
-    title: "研究テーマ2",
-    body: "研究テーマの概要をここに記載します。対象、アプローチ、応用先などを2〜4文程度で説明します。",
-  },
-  {
-    title: "研究テーマ3",
-    body: "研究テーマの概要をここに記載します。対象、アプローチ、応用先などを2〜4文程度で説明します。",
-  },
-];
+interface Axis {
+  title: string;
+  lead?: string;
+  note?: string;
+}
+interface ResearchData {
+  lead?: string;
+  footnote?: string;
+  axes?: Record<string, Axis>;
+  outreach?: string;
+}
+
+// テーマの frontmatter に書く名前と、表示するシミュレーターの対応
+const simulators = {
+  modelock: ModeLockSim,
+  comb: CombSim,
+  lidar: LidarSim,
+  lock: LockSim,
+  combine: CombineSim,
+  absorption: AbsorptionSim,
+  amp: AmpSim,
+  eocomb: EoCombSim,
+  lif: LifSim,
+  cooling: CoolingSim,
+  hyper: HyperSim,
+  extract: ExtractSim,
+};
+type SimKey = keyof typeof simulators;
+const simsOf = (d: { simulator?: SimKey; simulator2?: SimKey }): SimKey[] =>
+  [d.simulator, d.simulator2].filter((s): s is SimKey => Boolean(s));
+
+const lab = loadLab();
+const data = loadYaml<ResearchData>("src/data/research.yaml", {});
+
+const themes = (await getCollection("themes", ({ data }) => isVisible(data))).sort(
+  (a, b) => a.data.order - b.data.order,
+);
+const rendered = await Promise.all(
+  themes.map(async (t) => ({ ...t, Content: (await render(t)).Content })),
+);
+
+const axisKeys = ["create", "measure", "control"] as const;
+const groups = axisKeys
+  .map((key) => ({ key, axis: data.axes?.[key], items: rendered.filter((t) => t.data.axis === key) }))
+  .filter((g) => g.items.length > 0);
+const past = rendered.filter((t) => t.data.axis === "past");
+
+const columns = await getCollection("columns", ({ data }) => isVisible(data));
+
+// 研究テーマから案内する、お試し課題(公開できるものだけ)
+const challenges = await getCollection("challenges", ({ data }) => isVisible(data));
+const challengeOf = (id?: string) => challenges.find((c) => c.id === id);
+const hasContent = rendered.length > 0;
+const hasDraft = rendered.some((t) => t.data.draft);
+
+// 公開できる研究テーマがまだ無い間は、3つの軸の紹介だけを表示する。
+const fallbackAreas = ["create", "measure", "control"]
+  .map((key) => data.axes?.[key])
+  .filter((axis): axis is Axis => Boolean(axis?.title));
 ---
 
 <BaseLayout title="研究内容" description="研究室の研究テーマの紹介です。">
   <h1>研究内容</h1>
-  <p class="page-lead">
-    研究室全体の研究方針や背景をここに記載します。
-  </p>
 
   {
-    researchAreas.map((area) => (
-      <section>
-        <h2>{area.title}</h2>
-        <p>{area.body}</p>
-      </section>
-    ))
+    !hasContent ? (
+      <>
+        {lab.intro && <p class="page-lead">{lab.intro}</p>}
+        {lab.footnote && <p class="stat-note">{lab.footnote}</p>}
+        {fallbackAreas.map((area) => (
+          <section>
+            <h2>{area.title}</h2>
+            {area.lead && <p>{area.lead}</p>}
+            {area.note && <p>{area.note}</p>}
+          </section>
+        ))}
+        <p class="stat-note">それぞれの研究テーマの詳しい紹介は、準備ができたものから順に掲載します。</p>
+      </>
+    ) : (
+      <>
+        {import.meta.env.DEV && hasDraft && (
+          <p class="notice">
+            プレビュー表示です。「下書き」(draft: true)の項目は、公開サイトには表示されません。
+          </p>
+        )}
+
+        {lab.intro && <p class="page-lead">{lab.intro}</p>}
+        {lab.footnote && <p class="stat-note">{lab.footnote}</p>}
+        {data.lead && <p>{data.lead}</p>}
+
+        {columns.length > 0 && (
+          <p>
+            我々の研究がどのように社会に貢献するか、いくつかコラムを書いてみましたので、興味があるところをご覧ください。
+            <a href={withBase("/columns/")}>コラム一覧を見る</a>
+          </p>
+        )}
+
+        <nav aria-label="このページの内容">
+          <ul class="page-toc">
+            {groups.map((group) => (
+              <li>
+                <a href={`#${group.key}`}>
+                  {group.axis?.title ?? group.key}
+                  <small>{group.items.length}テーマ</small>
+                </a>
+              </li>
+            ))}
+            {data.outreach && (
+              <li>
+                <a href="#outreach">アウトリーチ活動</a>
+              </li>
+            )}
+            {past.length > 0 && (
+              <li>
+                <a href="#past">過去の研究</a>
+              </li>
+            )}
+          </ul>
+        </nav>
+        <p class="stat-note">題名をクリックすると、詳しい説明が開きます。</p>
+        <FoldTools />
+
+        {groups.map((group) => (
+          <section id={group.key}>
+            <h2>{group.axis?.title ?? group.key}</h2>
+            {group.axis?.lead && <p>{group.axis.lead}</p>}
+            {group.axis?.note && <p>{group.axis.note}</p>}
+            <div class="fold-list">
+              {group.items.map((theme) => (
+                <details class="fold" id={theme.id}>
+                  <summary>
+                    <h3 class="fold__title">
+                      {theme.data.title}
+                      {simsOf(theme.data).length > 0 && <span class="tag">シミュレーターあり</span>}
+                      {theme.data.draft && <span class="badge-draft">下書き</span>}
+                    </h3>
+                    {theme.data.summary && <span class="fold__summary">{theme.data.summary}</span>}
+                  </summary>
+                  <div class="fold__body">
+                  <theme.Content />
+                  {simsOf(theme.data).length > 0 && (
+                    <details class="sim-toggle">
+                      <summary>動かして確かめる(シミュレーター)</summary>
+                      {simsOf(theme.data).map((key) => {
+                        const Sim = simulators[key];
+                        return <Sim />;
+                      })}
+                    </details>
+                  )}
+                  {challengeOf(theme.data.challenge) && (
+                    <p class="theme-challenge">
+                      関連するお試し課題:{" "}
+                      <a href={withBase(`/join/challenges/${theme.data.challenge}/`)}>
+                        {challengeOf(theme.data.challenge)?.data.title}
+                      </a>
+                    </p>
+                  )}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+        ))}
+
+        {data.outreach && (
+          <section id="outreach">
+            <h2>アウトリーチ活動</h2>
+            <p>{data.outreach}</p>
+          </section>
+        )}
+
+        {past.length > 0 && (
+          <section id="past">
+            <h2>過去の研究</h2>
+            <div class="fold-list">
+              {past.map((theme) => (
+                <details class="fold" id={theme.id}>
+                  <summary>
+                    <h3 class="fold__title">
+                      {theme.data.title}
+                      {theme.data.draft && <span class="badge-draft">下書き</span>}
+                    </h3>
+                    {theme.data.summary && <span class="fold__summary">{theme.data.summary}</span>}
+                  </summary>
+                  <div class="fold__body">
+                    <theme.Content />
+                  </div>
+                </details>
+              ))}
+            </div>
+          </section>
+        )}
+      </>
+    )
   }
+  <script>
+    // 本文の中に <div data-sim-slot></div> と書いたテーマでは、シミュレーターをその位置へ移す
+    // (書いていないテーマでは、これまでどおり本文の最後に表示される)
+    document.querySelectorAll<HTMLElement>(".fold__body").forEach((body) => {
+      const slot = body.querySelector<HTMLElement>("[data-sim-slot]");
+      const sims = body.querySelector<HTMLElement>(":scope > .sim-toggle");
+      if (slot && sims) slot.replaceWith(sims);
+    });
+  </script>
 </BaseLayout>

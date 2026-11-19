@@ -1,0 +1,39 @@
+---
+// 折りたたみ(<details class="fold">)を使うページに置く、「すべて開く/すべて閉じる」ボタン。
+// あわせて、URLの #id で指定された折りたたみを、自動で開く。
+---
+
+<p class="fold-tools">
+  <button type="button" data-fold-all>すべて開く</button>
+</p>
+
+<script>
+  const folds = () => [...document.querySelectorAll<HTMLDetailsElement>("details.fold")];
+
+  const button = document.querySelector<HTMLButtonElement>("[data-fold-all]");
+  const updateLabel = () => {
+    if (button) button.textContent = folds().every((d) => d.open) ? "すべて閉じる" : "すべて開く";
+  };
+  button?.addEventListener("click", () => {
+    const open = !folds().every((d) => d.open);
+    folds().forEach((d) => (d.open = open));
+    updateLabel();
+  });
+  folds().forEach((d) => d.addEventListener("toggle", updateLabel));
+
+  // #id で指定された場所が折りたたみの中(または折りたたみそのもの)なら、開いてから表示する
+  const openTarget = () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (!target) return;
+    let el: HTMLElement | null = target;
+    while (el) {
+      if (el instanceof HTMLDetailsElement) el.open = true;
+      el = el.parentElement;
+    }
+    target.scrollIntoView();
+  };
+  window.addEventListener("hashchange", openTarget);
+  openTarget();
+</script>

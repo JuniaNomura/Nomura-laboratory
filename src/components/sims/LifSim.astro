@@ -1,0 +1,377 @@
+---
+// レーザー誘起蛍光(LIF)シミュレーター(研究内容「レーザー誘起蛍光法」用)。
+// 流れる液体に混ぜた蛍光体の粒子に、横から緑のレーザーを当てると、
+// レーザーの中を通る粒子だけがオレンジに光り、流れに乗って動く様子が見える。
+// 研究テーマの frontmatter に simulator: "lif" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="lif">
+  <p class="sim__title">レーザー誘起蛍光シミュレーター: 光った粒子を追えば、流れが見える</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>流れの種類</span>
+      <select data-role="flow">
+        <option value="uniform">まっすぐな流れ</option>
+        <option value="cylinder" selected>円柱をよける流れ</option>
+        <option value="vortex">渦</option>
+        <option value="turbulent">乱れた流れ</option>
+      </select>
+    </label>
+    <label class="sim__field">
+      <span>流れの速さ: <output data-role="speed-out">1.0</output></span>
+      <input data-role="speed" type="range" min="0.2" max="2" step="0.1" value="1" />
+    </label>
+    <label class="sim__field">
+      <span>レーザーの高さ: <output data-role="pos-out">62</output>%</span>
+      <input data-role="pos" type="range" min="5" max="95" step="1" value="62" />
+    </label>
+    <label class="sim__field">
+      <span>レーザーの幅: <output data-role="width-out">細い</output></span>
+      <input data-role="width" type="range" min="6" max="400" step="2" value="16" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="filter" aria-pressed="false">カメラのフィルター: 切</button>
+    <button type="button" data-role="trail" aria-pressed="false">軌跡を残す(長い露光): 切</button>
+    <button type="button" data-role="all" aria-pressed="false">光っていない粒子も表示: 切</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="420"
+    role="img"
+    aria-label="液体の流れる水槽を横から見た図。左から緑のレーザーが水平に入り、レーザーの中を通る蛍光体の粒子だけがオレンジ色に光りながら、流れに乗って動く"
+  ></canvas>
+  <p class="sim__caption">
+    水槽を横から見た図です。液体は左から右へ流れていて(渦では、中心のまわりを回ります)、液体の中には蛍光体の小さな粒子が混ぜてあります。左のレーザーから出た緑の光が当たると、粒子は緑の光を吸収して、オレンジ色の光(蛍光)を出します。蛍光は、レーザーの中にいる間だけ出るので、光っている粒子は「いま、レーザーの通り道にある液体」の目印になります。レーザーを広げると、面全体の流れが見えます。「カメラのフィルター」は、緑の光を通さず、オレンジの光だけを通すフィルターです。強いレーザーの光に埋もれずに、弱い蛍光だけを撮影できます。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+
+  <p class="sim__caption">
+    実際の例: ローダミンなどの蛍光色素は、緑の光(波長532 nmのレーザーなど)を吸収して、それより波長の長いオレンジ色の光を出します。吸収した光のエネルギーの一部が、分子の振動などで失われるため、出てくる光はエネルギーが小さく(波長が長く)なります。蛍光は、光を吸収してから数ナノ秒(1ナノ秒は、10億分の1秒)で出るので、粒子がレーザーから出ると、ほぼ同時に消えます。このシミュレーターでは、見やすいように流れをゆっくりにしています。
+  </p>
+</div>
+
+<script>
+  const W = 900;
+  const H = 420;
+  // 水槽の内側
+  const L = 90;
+  const R = 880;
+  const T = 40;
+  const B = 380;
+  const CX = (L + R) / 2;
+  const CY = (T + B) / 2;
+  const N = 700; // 粒子の数
+  const U0 = 70; // 速さ1のときの流れの速さ(画面上、1秒あたりの画素数)
+  const CYL = 45; // 円柱の半径
+  const VORTEX_CORE = 110; // 渦の中心部の半径
+  const HIST = 24; // 軌跡として残す位置の数
+  const HIST_DT = 0.05; // 軌跡の位置を記録する間隔(秒)
+
+  type Flow = "uniform" | "cylinder" | "vortex" | "turbulent";
+
+  // 位置 (x, y)、時刻 t での流れの速度。y は下向きが正
+  const velocity = (flow: Flow, x: number, y: number, t: number, s: number): [number, number] => {
+    const U = U0 * s;
+    const dx = x - CX;
+    const dy = y - CY;
+    if (flow === "uniform") return [U, 0];
+    if (flow === "cylinder") {
+      // 円柱のまわりの、なめらかな流れ(ポテンシャル流)
+      const r2 = dx * dx + dy * dy;
+      if (r2 < CYL * CYL) return [0, 0];
+      const a2r4 = (CYL * CYL) / (r2 * r2);
+      return [U * (1 - a2r4 * (dx * dx - dy * dy)), -U * 2 * a2r4 * dx * dy];
+    }
+    if (flow === "vortex") {
+      // 中心部は全体が回り、外側ほどゆっくり回る渦(ランキン渦)
+      const r = Math.hypot(dx, dy) || 1;
+      const vt = r < VORTEX_CORE ? (1.6 * U * r) / VORTEX_CORE : (1.6 * U * VORTEX_CORE) / r;
+      return [(-vt * dy) / r, (vt * dx) / r];
+    }
+    // 乱れた流れ: 平均の流れに、動きながら形を変える渦をいくつも重ねる(流れ関数の回転)
+    let u = 0.7 * U;
+    let v = 0;
+    const modes: [number, number, number, number][] = [
+      // [x方向の波数, y方向の波数, 時間変化の速さ, 強さ]
+      [0.018, 0.021, 0.9, 0.55],
+      [0.031, 0.026, -1.3, 0.35],
+      [0.011, 0.04, 0.6, 0.3],
+    ];
+    for (const [kx, ky, w, a] of modes) {
+      const px = kx * (x - 0.7 * U * t) + w * t;
+      const py = ky * y + 0.5 * w * t;
+      const amp = a * U;
+      // 流れ関数 ψ = amp/ky × sin(px) sin(py) として、u = ∂ψ/∂y, v = -∂ψ/∂x
+      u += amp * Math.sin(px) * Math.cos(py);
+      v += (-amp * kx * Math.cos(px) * Math.sin(py)) / ky;
+    }
+    return [u, v];
+  };
+
+  const setup = (root: HTMLElement) => {
+    const q = <E extends HTMLElement>(role: string) => root.querySelector<E>(`[data-role="${role}"]`)!;
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const flowIn = q<HTMLSelectElement>("flow");
+    const speedIn = q<HTMLInputElement>("speed");
+    const posIn = q<HTMLInputElement>("pos");
+    const widthIn = q<HTMLInputElement>("width");
+    const readout = q<HTMLElement>("readout");
+
+    const on = { filter: false, trail: false, all: false };
+    const names = {
+      filter: "カメラのフィルター",
+      trail: "軌跡を残す(長い露光)",
+      all: "光っていない粒子も表示",
+    };
+
+    const px = new Float32Array(N);
+    const py = new Float32Array(N);
+    // 軌跡: 粒子ごとに、過去の位置と、そのときの光の強さを記録する(リングバッファ)
+    const hx = new Float32Array(N * HIST);
+    const hy = new Float32Array(N * HIST);
+    const hg = new Float32Array(N * HIST);
+    let head = 0;
+    let histTimer = 0;
+    let t = 0;
+
+    const inside = (x: number, y: number, flow: Flow): boolean => {
+      if (x < L || x > R || y < T || y > B) return false;
+      if (flow === "cylinder" && (x - CX) ** 2 + (y - CY) ** 2 < (CYL + 2) ** 2) return false;
+      return true;
+    };
+    const spawn = (i: number, flow: Flow, atInlet: boolean) => {
+      do {
+        px[i] = atInlet ? L + Math.random() * 8 : L + Math.random() * (R - L);
+        py[i] = T + Math.random() * (B - T);
+      } while (!inside(px[i], py[i], flow));
+      for (let k = 0; k < HIST; k++) {
+        hx[i * HIST + k] = px[i];
+        hy[i * HIST + k] = py[i];
+        hg[i * HIST + k] = 0;
+      }
+    };
+    const resetAll = () => {
+      const flow = flowIn.value as Flow;
+      for (let i = 0; i < N; i++) spawn(i, flow, false);
+    };
+
+    const beam = () => {
+      const pos = Number(posIn.value) / 100;
+      return { y: B - pos * (B - T), w: Number(widthIn.value) };
+    };
+    // レーザーの強さ(高さ方向にガウス型に広がる)
+    // 円柱の後ろ(右側)は、円柱が光をさえぎるので影になる
+    const inShadow = (x: number, y: number): boolean =>
+      flowIn.value === "cylinder" && x > CX && Math.abs(y - CY) < CYL;
+    const glowAt = (x: number, y: number, b: { y: number; w: number }): number =>
+      inShadow(x, y) ? 0 : Math.exp(-2 * ((y - b.y) / (b.w / 2)) ** 2);
+
+    const advance = (dt: number) => {
+      const flow = flowIn.value as Flow;
+      const s = Number(speedIn.value);
+      t += dt;
+      // 2回に分けて進める(中点法)と、渦の中で粒子が外へずれていきにくい
+      for (let i = 0; i < N; i++) {
+        const [u1, v1] = velocity(flow, px[i], py[i], t, s);
+        const mx = px[i] + (u1 * dt) / 2;
+        const my = py[i] + (v1 * dt) / 2;
+        const [u2, v2] = velocity(flow, mx, my, t, s);
+        px[i] += u2 * dt;
+        py[i] += v2 * dt;
+        if (!inside(px[i], py[i], flow)) spawn(i, flow, flow !== "vortex" && px[i] > R);
+      }
+      histTimer += dt;
+      if (histTimer >= HIST_DT) {
+        histTimer = 0;
+        head = (head + 1) % HIST;
+        const b = beam();
+        for (let i = 0; i < N; i++) {
+          hx[i * HIST + head] = px[i];
+          hy[i * HIST + head] = py[i];
+          hg[i * HIST + head] = glowAt(px[i], py[i], b);
+        }
+      }
+    };
+
+    const draw = () => {
+      const flow = flowIn.value as Flow;
+      const b = beam();
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+
+      // 水槽
+      ctx.fillStyle = "#11161f";
+      ctx.fillRect(L, T, R - L, B - T);
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(L, T, R - L, B - T);
+
+      // レーザー光源
+      ctx.fillStyle = "#1f3a26";
+      ctx.fillRect(8, b.y - 18, 62, 36);
+      ctx.strokeStyle = "#43d16a";
+      ctx.strokeRect(8, b.y - 18, 62, 36);
+      ctx.fillStyle = "#cfe9d6";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("レーザー", 39, b.y + 4);
+      ctx.textAlign = "left";
+
+      // レーザー光(フィルターを入れると、カメラには写らない)
+      if (!on.filter) {
+        const g = ctx.createLinearGradient(0, b.y - b.w, 0, b.y + b.w);
+        g.addColorStop(0, "rgba(67, 209, 106, 0)");
+        g.addColorStop(0.5, "rgba(67, 209, 106, 0.32)");
+        g.addColorStop(1, "rgba(67, 209, 106, 0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(70, Math.max(T, b.y - b.w), R - 70, Math.min(B, b.y + b.w) - Math.max(T, b.y - b.w));
+        ctx.fillRect(70, b.y - 3, L - 70, 6);
+      }
+
+      // 円柱(後ろにできる影も描く)
+      if (flow === "cylinder") {
+        if (!on.filter) {
+          ctx.fillStyle = "#11161f";
+          ctx.fillRect(CX, CY - CYL, R - CX, 2 * CYL);
+        }
+        ctx.fillStyle = "#3a404b";
+        ctx.beginPath();
+        ctx.arc(CX, CY, CYL, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 軌跡(光っていた間の位置だけをつなぐ)
+      if (on.trail) {
+        ctx.lineWidth = 2;
+        for (let i = 0; i < N; i++) {
+          for (let k = 1; k < HIST; k++) {
+            const a = (head - k + 1 + HIST) % HIST;
+            const c = (head - k + HIST) % HIST;
+            const gl = Math.min(hg[i * HIST + a], hg[i * HIST + c]);
+            if (gl < 0.05) continue;
+            const ax = hx[i * HIST + a];
+            const cx = hx[i * HIST + c];
+            if (Math.abs(ax - cx) > 60) continue; // 入口に戻った粒子はつながない
+            ctx.strokeStyle = `rgba(255, 150, 50, ${(gl * 0.85 * (1 - k / HIST)).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(ax, hy[i * HIST + a]);
+            ctx.lineTo(cx, hy[i * HIST + c]);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // 粒子
+      let lit = 0;
+      for (let i = 0; i < N; i++) {
+        const gl = glowAt(px[i], py[i], b);
+        if (gl > 0.3) lit++;
+        if (gl < 0.03) {
+          if (on.all) {
+            ctx.fillStyle = "#4a5260";
+            ctx.fillRect(px[i] - 1, py[i] - 1, 2, 2);
+          }
+          continue;
+        }
+        ctx.fillStyle = `rgba(255, 150, 50, ${(0.25 * gl).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(px[i], py[i], 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = `rgba(255, 196, 120, ${gl.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(px[i], py[i], 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 流れの向き
+      ctx.fillStyle = "#8a93a3";
+      ctx.font = "13px sans-serif";
+      const label =
+        flow === "vortex" ? "液体は、中心のまわりを回っている" : "液体の流れ →";
+      ctx.fillText(label, L, T - 14);
+      ctx.textAlign = "right";
+      ctx.fillText(on.filter ? "カメラ: オレンジの光だけが写る" : "カメラ: 緑とオレンジの両方が写る", R, T - 14);
+      ctx.textAlign = "left";
+
+      // 表示の更新
+      const sp = Number(speedIn.value);
+      q<HTMLOutputElement>("speed-out").value = sp.toFixed(1);
+      q<HTMLOutputElement>("pos-out").value = posIn.value;
+      const wide = b.w >= 200;
+      q<HTMLOutputElement>("width-out").value = b.w <= 30 ? "細い" : wide ? "広い(シート光)" : "中くらい";
+      updateText(flow, b.w, lit);
+    };
+
+    let lastText = "";
+    const updateText = (flow: Flow, w: number, lit: number) => {
+      const flowText = {
+        uniform: "まっすぐな流れでは、光った粒子は、レーザーに沿って同じ速さで右へ動きます。",
+        cylinder:
+          "円柱をよける流れでは、円柱の上と下で粒子が速くなり、前と後ろで遅くなります。レーザーの高さを円柱の近くに合わせると、粒子がよけていく様子がわかります。円柱がレーザーをさえぎるので、円柱の後ろは影になり、粒子は光りません。",
+        vortex:
+          w >= 200
+            ? "渦では、光った粒子が中心のまわりを回ります。中心に近い粒子はゆっくり動き、外側の粒子は大きな円を描きます。"
+            : "渦では、光った粒子がレーザーの外へ回り込んで、すぐに消えます。レーザーを広げると、回っている様子の全体が見えます。",
+        turbulent:
+          w >= 200
+            ? "乱れた流れでは、光った粒子が上下に揺れながら流れていきます。混ざり合う様子は、こうした粒子の動きから調べます。"
+            : "乱れた流れでは、光った粒子が上下に散らばり、レーザーの外へ出て、次々に消えていきます。混ざり合う様子は、こうした粒子の動きから調べます。",
+      }[flow];
+      const widthText =
+        w <= 30
+          ? "細いレーザーでは、1本の線の上にある液体だけが見えます。"
+          : w >= 200
+            ? "レーザーを広げると(シート光)、面全体の流れが一度に見えます。ただし、同じ強さのレーザーを広く使うので、実際には1つ1つの粒子の光は暗くなります。"
+            : "";
+      const trailText = on.trail
+        ? "軌跡は、光っていた間に粒子が通った道筋で、流れの向きを表します。軌跡の長さから、流れの速さも求められます。"
+        : "";
+      const text = `${flowText}${widthText}${trailText}(いま、約${lit}個の粒子が光っています)`;
+      if (text !== lastText) {
+        readout.textContent = text;
+        lastText = text;
+      }
+    };
+
+    (Object.keys(on) as (keyof typeof on)[]).forEach((key) => {
+      const btn = q<HTMLButtonElement>(key);
+      btn.addEventListener("click", () => {
+        on[key] = !on[key];
+        btn.setAttribute("aria-pressed", String(on[key]));
+        btn.textContent = `${names[key]}: ${on[key] ? "入" : "切"}`;
+        draw();
+      });
+    });
+    flowIn.addEventListener("change", () => {
+      resetAll();
+      draw();
+    });
+    [speedIn, posIn, widthIn].forEach((el) => el.addEventListener("input", draw));
+
+    let last = 0;
+    const loop = (time: number) => {
+      // 折りたたまれて見えていない間は、計算を止める
+      if (root.offsetParent !== null) {
+        const dt = Math.min(0.05, last ? (time - last) / 1000 : 0);
+        advance(dt);
+        draw();
+      }
+      last = time;
+      requestAnimationFrame(loop);
+    };
+
+    resetAll();
+    draw();
+    requestAnimationFrame(loop);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="lif"]').forEach(setup);
+</script>

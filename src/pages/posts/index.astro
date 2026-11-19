@@ -1,0 +1,52 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+import { withBase } from "../../utils/url";
+import { isVisible } from "../../utils/visibility";
+import { postKinds, formatDate } from "../../utils/posts";
+
+const posts = (await getCollection("posts", ({ data }) => isVisible(data))).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf(),
+);
+
+// 種類ごとにまとめて表示する(記事が1件もない種類は表示しない)。
+const groups = postKinds
+  .map((kind) => ({ ...kind, items: posts.filter((p) => p.data.kind === kind.value) }))
+  .filter((g) => g.items.length > 0);
+---
+
+<BaseLayout title="学生の記事" description="研究室の学生が書いた、レーザー製作記や学会参加記などの記事です。">
+  <h1>学生の記事</h1>
+  <p class="page-lead">
+    研究室の学生が、自分の言葉で書いた記事です。研究室での毎日が実際にどんなものか、のぞいてみてください。
+  </p>
+
+  {
+    groups.length === 0 ? (
+      <p>記事は準備中です。</p>
+    ) : (
+      groups.map((group) => (
+        <section>
+          <h2>{group.label}</h2>
+          <p>{group.lead}</p>
+          <ul class="card-list">
+            {group.items.map((post) => (
+              <li class="card">
+                <p class="card__meta">
+                  {formatDate(post.data.date)}
+                  {post.data.author && ` / ${post.data.author}`}
+                  {post.data.grade && ` (${post.data.grade})`}
+                </p>
+                <h3 class="card__title">
+                  <a href={withBase(`/posts/${post.id}/`)}>{post.data.title}</a>
+                  {post.data.draft && <span class="badge-draft">下書き</span>}
+                </h3>
+                {post.data.excerpt && <p>{post.data.excerpt}</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    )
+  }
+</BaseLayout>

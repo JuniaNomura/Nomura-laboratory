@@ -1,6 +1,8 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
+import rehypeFoldSections from "./src/plugins/rehype-fold-sections.mjs";
+import rehypeStripComments from "./src/plugins/rehype-strip-comments.mjs";
 
 // 公開先が決まったら、下の2つを書き換えてください。
 //   site: 最終的な公開URL (例: "https://your-org.github.io" や独自ドメイン)
@@ -16,6 +18,11 @@ export default defineConfig({
   output: "static",
   trailingSlash: "always",
   integrations: [sitemap()],
+  markdown: {
+    // 1. 本文中の確認用のメモ(<!-- ... -->)を、ページに出力しない
+    // 2. 「詳しく知る」の個別ページの本文を、見出しごとに折りたたむ
+    rehypePlugins: [rehypeStripComments, rehypeFoldSections],
+  },
   build: {
     format: "directory",
   },

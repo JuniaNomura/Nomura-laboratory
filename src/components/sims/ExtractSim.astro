@@ -1,0 +1,633 @@
+---
+// レーザー誘起抽出シミュレーター(研究内容「レーザー誘起抽出技術」用)。
+// 水の中のコーヒー豆の粉にレーザーを当てると、当たった所だけが熱くなって成分が溶け出す様子と、
+// 取り出した液を分光光度計(スペクトル分析装置)で測って、成分ごとの量を見積もる様子を見せる。
+// 研究を始める前の、考え方を示すための概念モデルで、数値はすべて仮のもの。
+// 研究テーマの frontmatter に simulator: "extract" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="extract">
+  <p class="sim__title">レーザー誘起抽出シミュレーター: 光を当てた所から、コーヒーの成分を取り出す</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>レーザーの強さ: <output data-role="power-out">0.7</output></span>
+      <input data-role="power" type="range" min="0.2" max="1" step="0.05" value="0.7" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="laser" aria-pressed="false">レーザー: 切</button>
+    <button type="button" data-role="scan" aria-pressed="false">レーザーを左右に動かす: 切</button>
+    <button type="button" data-role="heater" aria-pressed="false">ヒーターで全体を温める(従来の方法): 切</button>
+    <button type="button" data-role="analyze">液を取って分析する</button>
+    <button type="button" data-role="reset">最初からやり直す</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="500"
+    role="img"
+    aria-label="左に、コーヒーの粉が沈んだ水の容器と、横から当てるレーザー。右上に分光光度計のしくみ、右中央に測った吸収スペクトル、右下に成分ごとの量の棒グラフ"
+  ></canvas>
+  <p class="sim__caption">
+    左は、水の入った容器の底に、コーヒー豆の粉を沈めたところです。左のレーザーの光は、レンズで容器の底に集められていて、光が集まった所(焦点)だけが熱くなります。熱くなった粉からは成分が溶け出し、100 ℃を超える所では小さな泡もできます。比べるために、ヒーターで水全体を温める、従来の方法も試せます。
+  </p>
+  <p class="sim__caption">
+    「液を取って分析する」を押すと、容器の液を少し取り、分光光度計で測ります。分光光度計は、液に光を通して、波長ごとに、どれだけ光が吸収されたか(吸収スペクトル)を測る装置です。成分ごとに、光をよく吸収する波長が違うので、スペクトルの形から、それぞれの成分の量を見積もれます。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+
+  <p class="sim__caption">
+    実際の例: コーヒーに含まれるカフェインは波長約270 nm、クロロゲン酸は約325 nmの紫外線をよく吸収します。コーヒーの茶色のもとになる褐色の色素(メラノイジン)は、短い波長ほどよく吸収し、目に見える光も吸収するので、液が茶色に見えます。このシミュレーターは、研究を始める前に考え方を示すための単純なモデルです。温度と溶け出す速さの関係、使ったエネルギー、成分ごとの溶け出しやすさなどは、すべて仮の値です。
+  </p>
+</div>
+
+<script>
+  const W = 900;
+  const H = 500;
+  // 容器
+  const BX0 = 92;
+  const BX1 = 420;
+  const WATER_TOP = 70;
+  const BOTTOM = 420;
+  const BED_TOP = 362; // 粉の層の上の端
+  const FOCUS_Y = 388; // レーザーの焦点の高さ
+  const LENS_X = BX0 - 2;
+  const HOT_RADIUS = 30; // 焦点のまわりで熱くなる範囲(画素)
+  const N_GRAINS = 170;
+  const ROOM = 20; // 室温(℃)
+  const K0 = 0.004; // 室温での、成分が溶け出す速さ(1秒あたりの割合)
+  const LASER_ENERGY = 1; // レーザーの強さ1で、1秒に使うエネルギー(仮の単位)
+  const HEATER_ENERGY = 10; // ヒーターが1秒に使うエネルギー(仮の単位)
+
+  // 成分: 名前、色、溶け出しやすさ(相対値)、粉に含まれる量(相対値)
+  const COMPONENTS = [
+    { name: "カフェイン", color: "#6fb7ff", rate: 1.0, amount: 1.0 },
+    { name: "クロロゲン酸", color: "#7fd1a0", rate: 0.7, amount: 1.6 },
+    { name: "褐色の色素(メラノイジン)", color: "#d39b5b", rate: 0.35, amount: 2.4 },
+  ];
+  // 吸収スペクトルの形(波長 nm に対する吸収のしやすさ)
+  const g = (x: number, c: number, w: number) => Math.exp(-(((x - c) / w) ** 2) / 2);
+  const SHAPES = [
+    (l: number) => g(l, 273, 14) + 0.5 * g(l, 210, 12),
+    (l: number) => g(l, 325, 22) + 0.55 * g(l, 298, 14) + 0.4 * g(l, 245, 14),
+    (l: number) => 0.9 * Math.exp(-(l - 250) / 140),
+  ];
+  const L_MIN = 240;
+  const L_MAX = 600;
+
+  // 温度が高いほど、成分は速く溶け出す(仮の式)
+  const speedAt = (T: number): number => Math.exp((Math.min(T, 100) - ROOM) / 25) * (T > 100 ? 3 : 1);
+
+  const gauss = (): number =>
+    Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random());
+
+  // 3つの成分の量を、測ったスペクトルから最小二乗法で見積もる
+  const fit = (spec: { l: number; a: number }[]): number[] => {
+    const M = [
+      [0, 0, 0],
+      [0, 0, 0],
+      [0, 0, 0],
+    ];
+    const v = [0, 0, 0];
+    for (const { l, a } of spec) {
+      const s = SHAPES.map((f) => f(l));
+      for (let i = 0; i < 3; i++) {
+        v[i] += s[i] * a;
+        for (let j = 0; j < 3; j++) M[i][j] += s[i] * s[j];
+      }
+    }
+    // 3行3列の連立方程式(クラメルの公式)
+    const det = (m: number[][]) =>
+      m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+      m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+      m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    const d = det(M);
+    return [0, 1, 2].map((k) => {
+      const mk = M.map((row, i) => row.map((x, j) => (j === k ? v[i] : x)));
+      return Math.max(0, det(mk) / d);
+    });
+  };
+
+  interface Grain {
+    x: number;
+    y: number;
+    r: number;
+    left: number[]; // 成分ごとの、まだ残っている割合
+    jx: number;
+    jy: number;
+  }
+  interface Puff {
+    x: number;
+    y: number;
+    life: number;
+    vx: number;
+  }
+  interface Bubble {
+    x: number;
+    y: number;
+    r: number;
+  }
+
+  const setup = (root: HTMLElement) => {
+    const q = <E extends HTMLElement>(role: string) => root.querySelector<E>(`[data-role="${role}"]`)!;
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const powerIn = q<HTMLInputElement>("power");
+    const readout = q<HTMLElement>("readout");
+    const analyzeBtn = q<HTMLButtonElement>("analyze");
+
+    const on = { laser: false, scan: false, heater: false };
+    const names = {
+      laser: "レーザー",
+      scan: "レーザーを左右に動かす",
+      heater: "ヒーターで全体を温める(従来の方法)",
+    };
+
+    let grains: Grain[] = [];
+    let puffs: Puff[] = [];
+    let bubbles: Bubble[] = [];
+    let conc = [0, 0, 0]; // 液の中の、成分ごとの量
+    let bulkT = ROOM;
+    let energy = 0;
+    let time = 0;
+    let focusX = (BX0 + BX1) / 2;
+    let hotT = ROOM; // 焦点の温度
+    // 分析: idle → pipette(液を取る) → scan(波長を順に測る) → done
+    let phase: "idle" | "pipette" | "scan" | "done" = "idle";
+    let phaseT = 0;
+    let sample = [0, 0, 0];
+    let spectrum: { l: number; a: number }[] = [];
+    let previous: { l: number; a: number }[] = [];
+    let estimate: number[] = [];
+    let previousEstimate: number[] = [];
+    let measuredAt = 0;
+
+    const reset = () => {
+      grains = [];
+      for (let i = 0; i < N_GRAINS; i++) {
+        grains.push({
+          x: BX0 + 10 + Math.random() * (BX1 - BX0 - 20),
+          y: BED_TOP + 6 + Math.random() * (BOTTOM - BED_TOP - 12),
+          r: 3 + Math.random() * 3,
+          left: [1, 1, 1],
+          jx: 0,
+          jy: 0,
+        });
+      }
+      puffs = [];
+      bubbles = [];
+      conc = [0, 0, 0];
+      bulkT = ROOM;
+      energy = 0;
+      time = 0;
+      phase = "idle";
+      spectrum = [];
+      previous = [];
+      estimate = [];
+      previousEstimate = [];
+    };
+
+    const totalMax = COMPONENTS.reduce((a, c) => a + c.amount, 0);
+    const extracted = () => conc.reduce((a, c) => a + c, 0) / totalMax; // 取り出せた割合
+
+    const advance = (dt: number) => {
+      const P = Number(powerIn.value);
+      time += dt;
+      // レーザーの焦点を左右に動かす
+      if (on.scan) focusX = (BX0 + BX1) / 2 + Math.sin(time * 0.8) * ((BX1 - BX0) / 2 - 30);
+      // 水全体の温度: ヒーターなら90 ℃に向かって上がり、レーザーだけならわずかに上がる。何もしなければ室温に戻る
+      if (on.heater) bulkT += ((90 - bulkT) * dt) / 25;
+      else bulkT += ((ROOM - bulkT) * dt) / 120;
+      if (on.laser) bulkT += P * 0.08 * dt;
+      hotT = on.laser ? bulkT + P * 150 : bulkT;
+      if (on.laser) energy += P * LASER_ENERGY * dt;
+      if (on.heater) energy += HEATER_ENERGY * dt;
+
+      for (const gr of grains) {
+        const d2 = (gr.x - focusX) ** 2 + (gr.y - FOCUS_Y) ** 2;
+        const T = on.laser ? bulkT + P * 150 * Math.exp(-d2 / (2 * HOT_RADIUS ** 2)) : bulkT;
+        const k = K0 * speedAt(T);
+        let released = 0;
+        COMPONENTS.forEach((c, n) => {
+          const out = gr.left[n] * (1 - Math.exp(-k * c.rate * dt));
+          gr.left[n] -= out;
+          const amt = (out * c.amount) / N_GRAINS;
+          conc[n] += amt;
+          released += amt;
+        });
+        // 溶け出した成分が、煙のように立ちのぼる(見た目だけ)
+        if (Math.random() < released * 900) {
+          puffs.push({ x: gr.x, y: gr.y - 4, life: 1, vx: (Math.random() - 0.5) * 6 });
+        }
+        // 100 ℃を超える所では、泡ができ、粉が揺さぶられる
+        if (T > 100) {
+          if (Math.random() < dt * 6) bubbles.push({ x: gr.x, y: gr.y - 4, r: 1.5 + Math.random() * 2.5 });
+          gr.jx = gauss() * 1.2;
+          gr.jy = gauss() * 1.2;
+        } else {
+          gr.jx *= 0.8;
+          gr.jy *= 0.8;
+        }
+      }
+      for (const p of puffs) {
+        p.y -= 22 * dt;
+        p.x += p.vx * dt + gauss() * 0.6;
+        p.life -= dt / 4;
+      }
+      puffs = puffs.filter((p) => p.life > 0 && p.y > WATER_TOP).slice(-400);
+      for (const b of bubbles) {
+        b.y -= (40 + b.r * 15) * dt;
+        b.x += gauss() * 0.4;
+      }
+      bubbles = bubbles.filter((b) => b.y > WATER_TOP + 2).slice(-200);
+
+      // 分析の進み具合
+      if (phase === "pipette") {
+        phaseT += dt;
+        if (phaseT > 1.2) {
+          phase = "scan";
+          phaseT = 0;
+          spectrum = [];
+          for (let l = L_MIN; l <= L_MAX; l += 2) {
+            const a = SHAPES.reduce((s, f, n) => s + sample[n] * f(l), 0) * 1.4 + 0.006 * gauss();
+            spectrum.push({ l, a });
+          }
+        }
+      } else if (phase === "scan") {
+        phaseT += dt;
+        if (phaseT > 1.6) {
+          phase = "done";
+          estimate = fit(spectrum.map((s) => ({ l: s.l, a: s.a / 1.4 })));
+          analyzeBtn.disabled = false;
+          updateText(true);
+        }
+      }
+    };
+
+    const waterColor = () => {
+      // 色素が多いほど、茶色く濃くなる
+      const c = Math.min(1, conc[2] / (COMPONENTS[2].amount * 0.6));
+      const r = Math.round(40 + (110 - 40) * c);
+      const gC = Math.round(70 + (55 - 70) * c);
+      const b = Math.round(110 + (25 - 110) * c);
+      return { fill: `rgba(${r}, ${gC}, ${b}, ${0.45 + 0.45 * c})`, c };
+    };
+
+    const drawBeaker = () => {
+      const P = Number(powerIn.value);
+      // 水
+      ctx.fillStyle = waterColor().fill;
+      ctx.fillRect(BX0, WATER_TOP, BX1 - BX0, BOTTOM - WATER_TOP);
+      // 立ちのぼる成分
+      for (const p of puffs) {
+        ctx.fillStyle = `rgba(120, 70, 30, ${(0.35 * p.life).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 4 + (1 - p.life) * 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 粉
+      for (const gr of grains) {
+        const left = (gr.left[0] + gr.left[1] + gr.left[2]) / 3;
+        const rC = Math.round(70 + (196 - 70) * (1 - left));
+        const gC = Math.round(40 + (160 - 40) * (1 - left));
+        const bC = Math.round(20 + (110 - 20) * (1 - left));
+        ctx.fillStyle = `rgb(${rC}, ${gC}, ${bC})`;
+        ctx.beginPath();
+        ctx.arc(gr.x + gr.jx, gr.y + gr.jy, gr.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // 泡
+      ctx.strokeStyle = "rgba(230, 240, 255, 0.85)";
+      ctx.lineWidth = 1;
+      for (const b of bubbles) {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // レーザー
+      ctx.fillStyle = on.laser ? "#5a1f1f" : "#2a2f3a";
+      ctx.fillRect(8, FOCUS_Y - 16, 56, 32);
+      ctx.strokeStyle = on.laser ? "#ff6b6b" : "#5a6474";
+      ctx.strokeRect(8.5, FOCUS_Y - 15.5, 56, 32);
+      ctx.fillStyle = "#e6e9ef";
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("レーザー", 36, FOCUS_Y + 4);
+      ctx.textAlign = "left";
+      if (on.laser) {
+        ctx.fillStyle = `rgba(255, 80, 80, ${0.25 + 0.3 * P})`;
+        ctx.fillRect(64, FOCUS_Y - 7, LENS_X - 64, 14);
+        ctx.beginPath();
+        ctx.moveTo(LENS_X, FOCUS_Y - 7);
+        ctx.lineTo(focusX, FOCUS_Y - 1);
+        ctx.lineTo(focusX, FOCUS_Y + 1);
+        ctx.lineTo(LENS_X, FOCUS_Y + 7);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255, 80, 80, ${0.18 + 0.2 * P})`;
+        ctx.fill();
+        // 熱くなった所
+        const glow = ctx.createRadialGradient(focusX, FOCUS_Y, 0, focusX, FOCUS_Y, HOT_RADIUS * 1.3);
+        glow.addColorStop(0, `rgba(255, 190, 80, ${0.5 * P})`);
+        glow.addColorStop(1, "rgba(255, 190, 80, 0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(focusX, FOCUS_Y, HOT_RADIUS * 1.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // レンズ
+      ctx.strokeStyle = "#9fd0ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(LENS_X - 6, FOCUS_Y, 4, 14, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // ヒーター
+      ctx.fillStyle = on.heater ? "#b5472f" : "#2a2f3a";
+      ctx.fillRect(BX0 - 6, BOTTOM + 6, BX1 - BX0 + 12, 12);
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "11px sans-serif";
+      ctx.fillText(on.heater ? "ヒーター: 入" : "ヒーター: 切", BX0, BOTTOM + 34);
+      // 容器
+      ctx.strokeStyle = "#cfd6e2";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(BX0, WATER_TOP - 26);
+      ctx.lineTo(BX0, BOTTOM);
+      ctx.lineTo(BX1, BOTTOM);
+      ctx.lineTo(BX1, WATER_TOP - 26);
+      ctx.stroke();
+      // 温度
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#cfd6e2";
+      ctx.fillText("コーヒーの粉を沈めた水", BX0, 22);
+      ctx.font = "12px sans-serif";
+      ctx.fillText(`水全体の温度: ${bulkT.toFixed(0)} ℃`, BX0, 44);
+      ctx.fillStyle = on.laser ? "#ffbf66" : "#8a93a3";
+      ctx.fillText(`レーザーの当たっている所: ${on.laser ? `${Math.round(hotT)} ℃` : "―"}`, BX0 + 150, 44);
+      ctx.fillStyle = "#cfd6e2";
+      ctx.textAlign = "right";
+      ctx.fillText(`取り出せた成分: ${(extracted() * 100).toFixed(0)}%`, BX1, 22);
+      ctx.textAlign = "left";
+      // ピペット(分析のために液を取る)
+      if (phase === "pipette") {
+        const u = Math.min(1, phaseT / 1.2);
+        const x = BX1 - 40 + u * (560 - (BX1 - 40));
+        const y = u < 0.3 ? WATER_TOP + 20 - (u / 0.3) * 60 : WATER_TOP - 40 + ((u - 0.3) / 0.7) * 60;
+        ctx.fillStyle = "#e6e9ef";
+        ctx.fillRect(x - 3, y - 50, 6, 50);
+        ctx.fillStyle = waterColor().fill;
+        ctx.fillRect(x - 2, y - 14, 4, 13);
+      }
+    };
+
+    // 右上: 分光光度計のしくみ
+    const drawInstrument = () => {
+      const y = 76;
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#cfd6e2";
+      ctx.fillText("分光光度計(スペクトル分析装置)", 470, 22);
+      const blocks: [number, number, string][] = [
+        [470, 74, "光源"],
+        [586, 52, "液"],
+        [680, 74, "分光器"],
+        [796, 84, "検出器"],
+      ];
+      // 光の通り道
+      ctx.strokeStyle = phase === "scan" ? "#e6e9ef" : "#5a6474";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(544, y);
+      ctx.lineTo(796, y);
+      ctx.stroke();
+      blocks.forEach(([x, w, label]) => {
+        ctx.fillStyle = "#151a24";
+        ctx.fillRect(x, y - 22, w, 44);
+        ctx.strokeStyle = "#5a6474";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x + 0.5, y - 21.5, w, 44);
+        ctx.fillStyle = "#cfd6e2";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(label, x + w / 2, y + 38);
+        ctx.textAlign = "left";
+      });
+      // 液を入れた容器(セル)
+      if (phase !== "idle") {
+        const c = Math.min(1, sample[2] / (COMPONENTS[2].amount * 0.6));
+        ctx.fillStyle = `rgba(${Math.round(40 + 70 * c)}, ${Math.round(70 - 15 * c)}, ${Math.round(110 - 85 * c)}, ${0.45 + 0.45 * c})`;
+        ctx.fillRect(596, y - 18, 32, 36);
+      }
+      // 分光器の中の虹
+      if (phase === "scan" || phase === "done") {
+        const grd = ctx.createLinearGradient(690, 0, 744, 0);
+        ["#8a5cff", "#3b7bff", "#3fd17a", "#ffe14d", "#ff8a3d", "#ff3d3d"].forEach((c, i) => grd.addColorStop(i / 5, c));
+        ctx.fillStyle = grd;
+        ctx.fillRect(690, y - 8, 54, 16);
+      }
+    };
+
+    const xOfL = (l: number, l0: number, l1: number) => l0 + ((l - L_MIN) / (L_MAX - L_MIN)) * (l1 - l0);
+
+    // 右中央: 吸収スペクトル
+    const drawSpectrum = () => {
+      const l0 = 490;
+      const l1 = 880;
+      const t = 150;
+      const b = 310;
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#cfd6e2";
+      ctx.fillText("吸収スペクトル(上ほど、よく吸収する)", 470, t - 10);
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(l0 + 0.5, t + 0.5, l1 - l0, b - t);
+      // 目に見える光の範囲
+      const grd = ctx.createLinearGradient(xOfL(380, l0, l1), 0, xOfL(600, l0, l1), 0);
+      ["#8a5cff", "#3b7bff", "#3fd17a", "#ffe14d", "#ff8a3d"].forEach((c, i) => grd.addColorStop(i / 4, c));
+      ctx.fillStyle = grd;
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(xOfL(380, l0, l1), b + 2, xOfL(600, l0, l1) - xOfL(380, l0, l1), 6);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#8a93a3";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "center";
+      for (const l of [250, 300, 350, 400, 450, 500, 550, 600]) ctx.fillText(String(l), xOfL(l, l0, l1), b + 22);
+      ctx.fillText("波長 (nm)", (l0 + l1) / 2, b + 36);
+      ctx.fillText("紫外線", xOfL(310, l0, l1), t + 14);
+      ctx.fillText("目に見える光", xOfL(490, l0, l1), t + 14);
+      ctx.textAlign = "left";
+      // 成分ごとの吸収のしやすさの位置
+      ctx.setLineDash([3, 4]);
+      [273, 325].forEach((l, i) => {
+        ctx.strokeStyle = COMPONENTS[i].color;
+        ctx.beginPath();
+        ctx.moveTo(xOfL(l, l0, l1), t + 20);
+        ctx.lineTo(xOfL(l, l0, l1), b);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      const A_MAX = 3.2;
+      const yOf = (a: number) => b - (Math.max(0, Math.min(A_MAX, a)) / A_MAX) * (b - t - 20);
+      const curve = (spec: { l: number; a: number }[], color: string, width: number, upto = 1) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        const n = Math.floor(spec.length * upto);
+        for (let i = 0; i < n; i++) {
+          const x = xOfL(spec[i].l, l0, l1);
+          if (i === 0) ctx.moveTo(x, yOf(spec[i].a));
+          else ctx.lineTo(x, yOf(spec[i].a));
+        }
+        ctx.stroke();
+      };
+      if (previous.length > 0) curve(previous, "rgba(170, 176, 190, 0.6)", 1.5);
+      if (phase === "scan") curve(spectrum, "#ffd84d", 2, Math.min(1, phaseT / 1.6));
+      else if (phase === "done") curve(spectrum, "#ffd84d", 2);
+      ctx.font = "11px sans-serif";
+      ctx.fillStyle = "#ffd84d";
+      ctx.textAlign = "right";
+      if (spectrum.length > 0) ctx.fillText(`黄: いま測った液(${measuredAt.toFixed(0)}秒の時点)`, l1 - 6, t + 32);
+      if (previous.length > 0) {
+        ctx.fillStyle = "#aab0be";
+        ctx.fillText("灰: 1つ前に測った液", l1 - 6, t + 46);
+      }
+      ctx.textAlign = "left";
+      if (phase === "idle") {
+        ctx.fillStyle = "#8a93a3";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("「液を取って分析する」を押すと、ここに結果が出ます", l0 + 12, (t + b) / 2 + 10);
+      }
+    };
+
+    // 右下: 成分ごとの量
+    const drawBars = () => {
+      const t = 386;
+      const left = 640;
+      const right = 880;
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#cfd6e2";
+      ctx.fillText("スペクトルから見積もった、成分ごとの量(粉に含まれる量に対する割合)", 470, t - 12);
+      COMPONENTS.forEach((c, i) => {
+        const y = t + i * 34;
+        ctx.fillStyle = c.color;
+        ctx.font = "12px sans-serif";
+        ctx.fillText(c.name, 470, y + 14);
+        ctx.strokeStyle = "#5a6474";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left + 0.5, y + 0.5, right - left, 20);
+        if (previousEstimate.length > 0) {
+          const pw = Math.min(1, previousEstimate[i] / c.amount) * (right - left);
+          ctx.fillStyle = "rgba(170, 176, 190, 0.35)";
+          ctx.fillRect(left, y + 14, pw, 6);
+        }
+        if (phase === "done" && estimate.length > 0) {
+          const frac = Math.min(1, estimate[i] / c.amount);
+          ctx.fillStyle = c.color;
+          ctx.fillRect(left, y + 2, frac * (right - left), 12);
+          ctx.fillStyle = "#e6e9ef";
+          ctx.textAlign = "right";
+          ctx.fillText(`${(frac * 100).toFixed(0)}%`, right - 6, y + 14);
+          ctx.textAlign = "left";
+        }
+      });
+    };
+
+    let lastText = "";
+    const updateText = (force = false) => {
+      const P = Number(powerIn.value);
+      let text: string;
+      const ex = extracted() * 100;
+      if (!on.laser && !on.heater) {
+        text =
+          "いまは、室温の水に粉を沈めただけです。成分は、ほとんど溶け出しません。「レーザー」のボタンを押して、レーザーを当ててみましょう。比べるために、ヒーターで全体を温める方法も試せます。";
+      } else if (on.laser && !on.heater) {
+        text = `レーザーの光が集まった所だけが、約${Math.round(hotT)} ℃まで熱くなり、そこにある粉から成分が溶け出しています。水全体の温度は、${bulkT.toFixed(0)} ℃とあまり上がりません。`;
+        if (hotT > 100) text += "100 ℃を超えた所では小さな泡ができ、粉が揺さぶられて、さらに溶け出しやすくなります。";
+        text += on.scan
+          ? "レーザーを左右に動かすと、熱くなる場所が移り、底全体の粉から成分を取り出せます。"
+          : "1か所に当てたままだと、その周りの粉しか使えません。「レーザーを左右に動かす」も試してください。";
+        if (P < 0.35) text += "レーザーが弱いと、温度が十分に上がらず、溶け出しはゆっくりです。";
+      } else if (!on.laser && on.heater) {
+        text = `ヒーターで、水全体を温めています(いま ${bulkT.toFixed(0)} ℃)。全部の粉から少しずつ溶け出しますが、水全体を温めるために、多くのエネルギーを使います。`;
+      } else {
+        text = "レーザーとヒーターの両方を使っています。";
+      }
+      text += `ここまでに使ったエネルギーは ${energy.toFixed(0)}(仮の単位)、取り出せた成分は ${ex.toFixed(0)}% です。`;
+      if (phase === "done" && estimate.length > 0) {
+        const pct = estimate.map((e, i) => Math.round((e / COMPONENTS[i].amount) * 100));
+        text += `分析の結果(${measuredAt.toFixed(0)}秒の時点): カフェイン ${pct[0]}%、クロロゲン酸 ${pct[1]}%、褐色の色素 ${pct[2]}%。溶け出しやすさは成分ごとに違うので、取り出す時間や温度を変えると、液の中の成分の割合(味)も変わります。`;
+      }
+      if (force || text !== lastText) {
+        readout.textContent = text;
+        lastText = text;
+      }
+    };
+
+    const draw = () => {
+      q<HTMLOutputElement>("power-out").value = Number(powerIn.value).toFixed(2);
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      drawBeaker();
+      drawInstrument();
+      drawSpectrum();
+      drawBars();
+    };
+
+    (Object.keys(on) as (keyof typeof on)[]).forEach((key) => {
+      const btn = q<HTMLButtonElement>(key);
+      btn.addEventListener("click", () => {
+        on[key] = !on[key];
+        btn.setAttribute("aria-pressed", String(on[key]));
+        btn.textContent = `${names[key]}: ${on[key] ? "入" : "切"}`;
+        updateText();
+      });
+    });
+    analyzeBtn.addEventListener("click", () => {
+      if (phase === "pipette" || phase === "scan") return;
+      if (spectrum.length > 0) {
+        previous = spectrum;
+        previousEstimate = estimate;
+      }
+      sample = [...conc];
+      measuredAt = time;
+      phase = "pipette";
+      phaseT = 0;
+      analyzeBtn.disabled = true;
+    });
+    q<HTMLButtonElement>("reset").addEventListener("click", () => {
+      reset();
+      analyzeBtn.disabled = false;
+      updateText();
+      draw();
+    });
+    powerIn.addEventListener("input", () => draw());
+
+    let last = 0;
+    let textTimer = 0;
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, last ? (now - last) / 1000 : 0);
+      last = now;
+      // 折りたたまれて見えていない間は、計算を止める
+      if (root.offsetParent !== null) {
+        advance(dt);
+        draw();
+        textTimer += dt;
+        if (textTimer > 0.5) {
+          textTimer = 0;
+          updateText();
+        }
+      }
+      requestAnimationFrame(loop);
+    };
+
+    reset();
+    draw();
+    updateText();
+    requestAnimationFrame(loop);
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="extract"]').forEach(setup);
+</script>

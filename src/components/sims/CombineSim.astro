@@ -1,0 +1,217 @@
+---
+// コヒーレント光結合シミュレーター(研究内容「コヒーレント光結合技術」用)。
+// 研究テーマの frontmatter に simulator: "combine" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="combine">
+  <p class="sim__title">コヒーレント光結合シミュレーター: 位相をそろえると、光が1点に集まる</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>並べるレーザーの数 N: <output data-role="n-out">5</output> 本</span>
+      <input data-role="n" type="range" min="1" max="9" step="1" value="5" />
+    </label>
+    <label class="sim__field">
+      <span>位相のばらつき: <output data-role="spread-out">100</output> %</span>
+      <input data-role="spread" type="range" min="0" max="100" step="1" value="100" />
+    </label>
+    <label class="sim__field sim__field--wide">
+      <span>となりのレーザーとの位相の差(そろえたうえで、一定の差を付ける): <output data-role="tilt-out">0</output>°</span>
+      <input data-role="tilt" type="range" min="-180" max="180" step="5" value="0" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="lock">位相をそろえる</button>
+    <button type="button" data-role="shuffle">位相をふり直す</button>
+  </div>
+
+  <canvas data-role="canvas" width="900" height="400" role="img" aria-label="上に並べたレーザーとそれぞれの位相、中央に遠くのスクリーンに映る光、下にその明るさの分布"
+  ></canvas>
+  <p class="sim__caption">
+    上は、横一列に並べたレーザーです。丸の中の針は、それぞれの光の位相(波の山が来るタイミング)を表します。中央は、十分に遠くに置いたスクリーンに映る光、下は、その明るさの分布です。縦軸は、レーザー1本だけのときの中心の明るさを1としています。青い破線は、位相がでたらめに変わり続けるとき(コヒーレントでない足し合わせ)の明るさです。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  const MAX_N = 9;
+  const U_MAX = 1.6; // 表示する角度の範囲(となりの明るい点までの間隔を1とする)
+  const ENV = 0.75; // レーザー1本の光の広がり(同じ単位)
+
+  const setup = (root: HTMLElement) => {
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const nIn = q<HTMLInputElement>("n");
+    const spreadIn = q<HTMLInputElement>("spread");
+    const tiltIn = q<HTMLInputElement>("tilt");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+
+    let seeds: number[] = [];
+    const shuffle = () => {
+      seeds = Array.from({ length: MAX_N }, () => (Math.random() * 2 - 1) * Math.PI);
+    };
+    shuffle();
+
+    const draw = () => {
+      const n = Number(nIn.value);
+      const spread = Number(spreadIn.value) / 100;
+      const tilt = (Number(tiltIn.value) * Math.PI) / 180;
+      q<HTMLOutputElement>("n-out").value = String(n);
+      q<HTMLOutputElement>("spread-out").value = spreadIn.value;
+      q<HTMLOutputElement>("tilt-out").value = tiltIn.value;
+      // 各レーザーの位相(中央のレーザーを基準にする)
+      const phases = Array.from({ length: n }, (_, k) => seeds[k] * spread + tilt * (k - (n - 1) / 2));
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      ctx.font = "13px sans-serif";
+      const left = 60;
+      const right = W - 20;
+
+      // --- 上: レーザーの列と位相の針 ---
+      const rowY = 48;
+      const pitch = 56;
+      const x0 = (left + right) / 2 - ((n - 1) * pitch) / 2;
+      phases.forEach((ph, k) => {
+        const x = x0 + k * pitch;
+        ctx.strokeStyle = "#8a8a96";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(x, rowY, 18, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.strokeStyle = "#ffd84d";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x, rowY);
+        ctx.lineTo(x + 16 * Math.sin(ph), rowY - 16 * Math.cos(ph));
+        ctx.stroke();
+        // 下向きに出ていく光
+        ctx.strokeStyle = "rgba(255,106,77,0.5)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, rowY + 22);
+        ctx.lineTo(x, rowY + 40);
+        ctx.stroke();
+      });
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText("レーザーと、その位相", left, 16);
+
+      // --- 明るさの分布を計算する ---
+      const points = right - left;
+      const values = new Float64Array(points + 1);
+      let peak = 0;
+      for (let i = 0; i <= points; i++) {
+        const u = ((i / points) * 2 - 1) * U_MAX;
+        let re = 0;
+        let im = 0;
+        for (let k = 0; k < n; k++) {
+          const ph = 2 * Math.PI * u * (k - (n - 1) / 2) + phases[k];
+          re += Math.cos(ph);
+          im += Math.sin(ph);
+        }
+        const v = (re * re + im * im) * Math.exp(-((u / ENV) ** 2));
+        values[i] = v;
+        if (v > peak) peak = v;
+      }
+      const full = Math.max(4, n * n) * 1.08;
+
+      // --- 中央: スクリーンに映る光 ---
+      const st = 112;
+      const sh = 70;
+      for (let i = 0; i <= points; i++) {
+        const b = Math.min(1, Math.pow(values[i] / (n * n), 0.55));
+        if (b < 0.01) continue;
+        for (let j = 0; j < 7; j++) {
+          // 上下方向には、ぼんやり広がった形にする
+          const fall = Math.exp(-(((j - 3) / 2.2) ** 2));
+          ctx.fillStyle = `rgba(255,${Math.round(90 + 150 * b)},${Math.round(60 + 120 * b * b)},${b * fall})`;
+          ctx.fillRect(left + i, st + (j * sh) / 7, 1, sh / 7 + 1);
+        }
+      }
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left + 0.5, st + 0.5, right - left, sh);
+      ctx.fillStyle = "#c8c8d0";
+      ctx.fillText("遠くのスクリーンに映る光", left, st - 8);
+
+      // --- 下: 明るさの分布 ---
+      const gt = 212;
+      const gb = H - 40;
+      ctx.strokeRect(left + 0.5, gt + 0.5, right - left, gb - gt);
+      const yOf = (v: number) => gb - (Math.min(full, v) / full) * (gb - gt);
+      // コヒーレントでない足し合わせ(N 本ぶんを、ただ足しただけ)
+      ctx.strokeStyle = "#6fb7ff";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      for (let i = 0; i <= points; i++) {
+        const u = ((i / points) * 2 - 1) * U_MAX;
+        const y = yOf(n * Math.exp(-((u / ENV) ** 2)));
+        if (i === 0) ctx.moveTo(left + i, y);
+        else ctx.lineTo(left + i, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "#ff6a4d";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= points; i++) {
+        if (i === 0) ctx.moveTo(left + i, yOf(values[i]));
+        else ctx.lineTo(left + i, yOf(values[i]));
+      }
+      ctx.stroke();
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "right";
+      ctx.fillText(`${Math.max(4, n * n)}倍`, left - 6, yOf(Math.max(4, n * n)) + 4);
+      ctx.fillText(`${n}倍`, left - 6, yOf(n) + 4);
+      ctx.fillText("0", left - 6, gb + 4);
+      ctx.textAlign = "center";
+      ctx.fillText("スクリーン上の位置(中央が、レーザーの正面)", (left + right) / 2, H - 14);
+
+      const ratio = peak / (n * n);
+      // 一定の位相差(向きを変えるだけ)を除いた、位相のそろい具合
+      let ar = 0;
+      let ai = 0;
+      for (let k = 0; k < n; k++) {
+        ar += Math.cos(seeds[k] * spread);
+        ai += Math.sin(seeds[k] * spread);
+      }
+      const align = (ar * ar + ai * ai) / (n * n);
+      const tiltDeg = Math.abs(Number(tiltIn.value));
+      let state: string;
+      if (n === 1) state = "レーザーが1本だけなので、ぼんやり広がった光です。";
+      else if (align > 0.9 && tiltDeg < 5) state = "位相がそろい、正面の1点に光が集まりました。";
+      else if (align > 0.9 && tiltDeg > 150)
+        state = "位相の差が180°に近いので、光は左右の2点に分かれました。正面は、打ち消し合って暗くなっています。";
+      else if (align > 0.9)
+        state = "位相が一定の差でそろっているので、光は集まったまま、向きだけが変わりました。鏡を動かさずに、光の向きを変えられます。";
+      else if (align > 0.5) state = "位相がそろいかけて、光が集まり始めています。";
+      else state = "位相がばらばらなので、光は集まらず、まだらに散らばっています。";
+      readout.textContent =
+        `いちばん明るい点の明るさ = レーザー1本のときの ${peak.toFixed(1)} 倍(位相が完全にそろうと ${n} × ${n} = ${n * n} 倍。ただ足しただけなら ${n} 倍) / ` +
+        `光の集まり具合 = ${(ratio * 100).toFixed(0)} %。${state}`;
+    };
+
+    nIn.addEventListener("input", draw);
+    spreadIn.addEventListener("input", draw);
+    tiltIn.addEventListener("input", draw);
+    q<HTMLButtonElement>("lock").addEventListener("click", () => {
+      spreadIn.value = "0";
+      draw();
+    });
+    q<HTMLButtonElement>("shuffle").addEventListener("click", () => {
+      shuffle();
+      if (spreadIn.value === "0") spreadIn.value = "100";
+      draw();
+    });
+    draw();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="combine"]').forEach(setup);
+</script>

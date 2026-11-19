@@ -1,0 +1,28 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection, render } from "astro:content";
+import { withBase } from "../../utils/url";
+import { isVisible } from "../../utils/visibility";
+
+export async function getStaticPaths() {
+  const columns = await getCollection("columns", ({ data }) => isVisible(data));
+  return columns.map((column) => ({
+    params: { slug: column.id },
+    props: { column },
+  }));
+}
+
+const { column } = Astro.props;
+const { Content } = await render(column);
+---
+
+<BaseLayout title={column.data.title} description={column.data.summary}>
+  <article>
+    {import.meta.env.DEV && column.data.draft && (
+      <p class="notice">プレビュー表示です(下書きのため、公開サイトには表示されません)。</p>
+    )}
+    <h1>{column.data.title}</h1>
+    <Content />
+  </article>
+  <p><a href={withBase("/columns/")}>← コラム一覧に戻る</a></p>
+</BaseLayout>

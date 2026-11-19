@@ -2,6 +2,16 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { getCollection, type CollectionEntry } from "astro:content";
 import { withBase } from "../../utils/url";
+import { loadYaml } from "../../utils/data";
+
+// researchmap から自動で取り込んだ受賞と委員会(scripts/fetch-researchmap.mjs が毎日更新する)
+interface Profile {
+  updated?: string;
+  awards?: { date?: string; name: string; association?: string }[];
+  committees?: { period?: string; name: string; association?: string }[];
+}
+const profileOf = (permalink?: string): Profile =>
+  permalink ? loadYaml<Profile>(`src/data/researchmap/${permalink}.yaml`, {}) : {};
 
 const allMembers = await getCollection("members");
 
@@ -15,6 +25,11 @@ const students = allMembers
   .filter((m) => !m.data.graduated && m.data.role === "student")
   .sort(byOrder);
 const alumni = allMembers.filter((m) => m.data.graduated).sort(byOrder);
+
+// 教員の紹介(経歴・受賞・委員会)。どれか1つでもある教員だけ表示する
+const profiles = faculty
+  .map((member) => ({ member, ...profileOf(member.data.permalink) }))
+  .filter((p) => p.member.data.career.length > 0 || p.member.data.qualifications.length > 0 || (p.awards?.length ?? 0) > 0 || (p.committees?.length ?? 0) > 0);
 
 const groups = [
   { label: "教員", members: faculty },
@@ -54,7 +69,7 @@ const groups = [
                   {member.data.industry && ` (${member.data.industry})`}
                 </p>
               )}
-              {member.data.qualifications.length > 0 && (
+              {member.data.qualifications.length > 0 && !faculty.includes(member) && (
                 <p class="member-card__detail">資格: {member.data.qualifications.join("、")}</p>
               )}
               {member.data.awards.length > 0 && (
@@ -75,6 +90,79 @@ const groups = [
             </li>
           ))}
         </ul>
+        {group.label === "教員" &&
+          profiles.map((p) => (
+            <div class="faculty-profile">
+              <h3>
+                {p.member.data.nameJa}
+                {p.member.data.positionJa && ` (${p.member.data.positionJa})`}
+              </h3>
+              {p.member.data.career.length > 0 && (
+                <>
+                  <h4>経歴</h4>
+                  <dl class="faculty-profile__list">
+                    {p.member.data.career.map((c) => (
+                      <>
+                        <dt>{c.period}</dt>
+                        <dd>{c.text}</dd>
+                      </>
+                    ))}
+                  </dl>
+                </>
+              )}
+              {p.member.data.qualifications.length > 0 && (
+                <>
+                  <h4>免許・資格</h4>
+                  <ul class="faculty-profile__plain">
+                    {p.member.data.qualifications.map((q) => (
+                      <li>{q}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {(p.awards?.length ?? 0) > 0 && (
+                <details class="faculty-profile__fold">
+                  <summary>受賞({p.awards?.length}件)</summary>
+                  <dl class="faculty-profile__list">
+                    {p.awards?.map((a) => (
+                      <>
+                        <dt>{a.date}</dt>
+                        <dd>
+                          {a.name}
+                          {a.association && `(${a.association})`}
+                        </dd>
+                      </>
+                    ))}
+                  </dl>
+                </details>
+              )}
+              {(p.committees?.length ?? 0) > 0 && (
+                <details class="faculty-profile__fold">
+                  <summary>委員会・学会活動({p.committees?.length}件)</summary>
+                  <dl class="faculty-profile__list">
+                    {p.committees?.map((c) => (
+                      <>
+                        <dt>{c.period}</dt>
+                        <dd>
+                          {c.name}
+                          {c.association && `(${c.association})`}
+                        </dd>
+                      </>
+                    ))}
+                  </dl>
+                </details>
+              )}
+              {p.updated && p.member.data.permalink && (
+                <p class="faculty-profile__note">
+                  受賞と委員会・学会活動は、
+                  <a href={`https://researchmap.jp/${p.member.data.permalink}`} target="_blank" rel="noopener">
+                    researchmap
+                  </a>
+                  から自動で取り込んでいます({p.updated} 更新)。
+                </p>
+              )}
+            </div>
+          ))}
       </section>
     ))
   }

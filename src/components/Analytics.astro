@@ -1,0 +1,26 @@
+---
+// アクセス解析(Cloudflare Web Analytics)の計測用コード。
+// Cookieを使わず、訪問者を個人として追跡しない。わかるのは、ページごとの閲覧数、国、リンク元、端末の種類など。
+// - トークンは src/config/site.ts の cloudflareAnalyticsToken に入れる
+// - 公開用のビルド(npm run build)のときだけ埋め込む。開発サーバーでの確認作業は数えない
+import { siteConfig } from "../config/site";
+
+const token = siteConfig.cloudflareAnalyticsToken.trim();
+// トークンは32文字の英数字。それ以外(書き間違いなど)のときは、埋め込まない
+const valid = /^[0-9a-f]{32}$/i.test(token);
+const enabled = import.meta.env.PROD && valid;
+const beacon = JSON.stringify({ token });
+---
+
+{
+  enabled && (
+    <script is:inline defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={beacon} />
+  )
+}
+{
+  import.meta.env.DEV && token !== "" && !valid && (
+    <script is:inline>
+      console.warn("アクセス解析のトークン(src/config/site.ts の cloudflareAnalyticsToken)が、32文字の英数字になっていません。");
+    </script>
+  )
+}

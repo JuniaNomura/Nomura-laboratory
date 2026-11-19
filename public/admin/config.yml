@@ -58,6 +58,371 @@ collections:
       - { label: "下書き(チェックすると公開されない)", name: draft, widget: boolean, default: false }
       - { label: "本文", name: body, widget: markdown }
 
+  - name: voices
+    label: "在学生の声"
+    label_singular: "在学生の声"
+    folder: "src/content/voices"
+    create: true
+    delete: true
+    identifier_field: displayName
+    extension: md
+    format: frontmatter
+    fields:
+      - { label: "表示名(氏名またはイニシャル)", name: displayName, widget: string, hint: "氏名の掲載を希望しない場合はイニシャル(例: T.Y.)にしてください" }
+      - { label: "学年など (例: M1, B4)", name: grade, widget: string, required: false }
+      - { label: "写真(掲載を希望する場合のみ)", name: photo, widget: image, required: false }
+      - { label: "表示順(小さいほど上に表示)", name: order, widget: number, default: 100, value_type: int }
+      - { label: "下書き(本人が内容を確認・同意するまでチェックしたままにする)", name: draft, widget: boolean, default: true }
+      - { label: "本文", name: body, widget: markdown }
+
+  - name: pages
+    label: "固定ページの内容"
+    files:
+      - label: "研究室紹介の導入文と、大切にしている言葉"
+        name: lab
+        file: "src/data/lab.yaml"
+        fields:
+          - { label: "導入文(トップページと研究内容ページに表示)", name: intro, widget: text }
+          - { label: "脚注", name: footnote, widget: text, required: false }
+          - label: "大切にしている言葉(トップページに表示)"
+            name: mottos
+            widget: list
+            required: false
+            fields:
+              - { label: "言葉(英語など)", name: quote, widget: string }
+              - { label: "日本語の訳", name: translation, widget: string, required: false }
+              - { label: "研究室としての解釈", name: text, widget: text, required: false }
+              - { label: "言った人・出典の説明", name: author, widget: text, required: false }
+              - { label: "参考文献", name: reference, widget: string, required: false }
+              - { label: "参考文献のリンク(DOIなど)", name: referenceUrl, widget: string, required: false }
+      - label: "研究室で学ぶ"
+        name: join
+        file: "src/data/join.yaml"
+        fields:
+          - { label: "公開する(オフの間は『準備中』と表示)", name: published, widget: boolean, default: false }
+          - { label: "導入文", name: lead, widget: text, required: false }
+          - { label: "どんな研究をしているか(空のときは「研究内容」ページへの案内だけを出す)", name: whatWeDo, widget: text, required: false }
+          - label: "研究室の1年(4月から順に)"
+            name: year
+            widget: list
+            required: false
+            summary: "{{month}}月"
+            fields:
+              - { label: "月", name: month, widget: number, value_type: int, min: 1, max: 12 }
+              - label: "予定"
+                name: items
+                widget: list
+                required: false
+                summary: "{{text}} {{who}}"
+                fields:
+                  - { label: "内容", name: text, widget: string }
+                  - label: "対象の学年(空欄なら全員。M0は修士進学予定の学部4年生)"
+                    name: who
+                    widget: select
+                    required: false
+                    options: ["B4", "M0", "M1", "M2", "M0以上", "M1以上"]
+                  - label: "種類(色分けに使う)"
+                    name: kind
+                    widget: select
+                    default: event
+                    options:
+                      - { label: "研究・発表", value: research }
+                      - { label: "学会", value: conference }
+                      - { label: "就職活動・インターン", value: career }
+                      - { label: "大学院入試", value: exam }
+                      - { label: "行事", value: event }
+          - label: "よくある質問"
+            name: faq
+            widget: list
+            required: false
+            fields:
+              - { label: "質問", name: q, widget: string }
+              - { label: "教員からの回答", name: a, widget: text, required: false }
+              - label: "関連するページ(「詳しく知る」のファイル名。例: policy, skills, career, coretime)"
+                name: guides
+                widget: list
+                required: false
+                default: []
+              - label: "先輩たちの声"
+                name: voices
+                widget: list
+                required: false
+                default: []
+                fields:
+                  - { label: "声", name: text, widget: text }
+                  - { label: "学年など (例: B4, M1)", name: who, widget: string, required: false }
+          - label: "連絡先"
+            name: contact
+            widget: object
+            fields:
+              - { label: "氏名", name: name, widget: string }
+              - { label: "職名", name: position, widget: string, required: false }
+              - { label: "メールアドレス", name: email, widget: string, required: false }
+              - { label: "案内文", name: note, widget: text, required: false }
+              - { label: "見学・相談フォームのURL", name: formUrl, widget: string, required: false, hint: "Google フォームなどのURL(https:// から)。入力するとボタンが表示されます" }
+              - { label: "ボタンの文字", name: formLabel, widget: string, required: false, hint: "空なら「見学・相談フォームを開く」" }
+              - { label: "ボタンの下の補足", name: formNote, widget: string, required: false }
+      - label: "卒業生の進路データ"
+        name: careers
+        file: "src/data/careers.yaml"
+        fields:
+          - label: "進路(1行=1人分。氏名・卒業年は入力しない)"
+            name: entries
+            widget: list
+            required: false
+            fields:
+              - label: "区分"
+                name: kind
+                widget: select
+                options: ["就職", "進学"]
+              - { label: "就職先・進学先", name: name, widget: string }
+              - label: "業種(就職の場合)"
+                name: industry
+                widget: select
+                required: false
+                options: ["電気・電子機器", "機械・自動車", "半導体", "情報・通信(IT)", "建設・設備", "エネルギー・インフラ", "素材・化学", "公務・教育", "その他"]
+              - label: "職種(就職の場合)"
+                name: jobType
+                widget: select
+                required: false
+                options: ["システムエンジニア", "研究開発", "設計・開発", "生産技術", "品質保証", "営業・技術営業", "その他"]
+      - label: "研究内容ページの見出し・導入文"
+        name: research
+        file: "src/data/research.yaml"
+        fields:
+          - { label: "研究内容ページの冒頭に、共通の導入文に続けて出す文(共通の導入文は「研究室紹介の導入文」で編集)", name: lead, widget: text, required: false }
+          - label: "3つの軸"
+            name: axes
+            widget: object
+            fields:
+              - label: "光を創る"
+                name: create
+                widget: object
+                fields:
+                  - { label: "見出し", name: title, widget: string }
+                  - { label: "説明", name: lead, widget: text, required: false }
+                  - { label: "補足", name: note, widget: text, required: false }
+              - label: "光で測る"
+                name: measure
+                widget: object
+                fields:
+                  - { label: "見出し", name: title, widget: string }
+                  - { label: "説明", name: lead, widget: text, required: false }
+              - label: "光で操る"
+                name: control
+                widget: object
+                fields:
+                  - { label: "見出し", name: title, widget: string }
+                  - { label: "説明", name: lead, widget: text, required: false }
+          - { label: "アウトリーチ活動", name: outreach, widget: text, required: false }
+
+  - name: themes
+    label: "研究テーマ"
+    label_singular: "研究テーマ"
+    folder: "src/content/themes"
+    create: true
+    delete: true
+    extension: md
+    format: frontmatter
+    fields:
+      - { label: "題名", name: title, widget: string }
+      - label: "分類"
+        name: axis
+        widget: select
+        options:
+          - { label: "光を創る", value: create }
+          - { label: "光で測る", value: measure }
+          - { label: "光で操る", value: control }
+          - { label: "過去の研究", value: past }
+      - { label: "1行の紹介(一覧で題名の下に表示)", name: summary, widget: string, required: false, hint: "本文は、題名をクリックして開いたときに表示されます" }
+      - { label: "表示順(小さいほど上に表示)", name: order, widget: number, default: 100, value_type: int }
+      - label: "シミュレーター(研究内容のページで、このテーマの下に表示)"
+        name: simulator
+        widget: select
+        required: false
+        options:
+          - { label: "モード同期シミュレーター", value: modelock }
+          - { label: "光周波数コム(frep・fceo)シミュレーター", value: comb }
+          - { label: "コヒーレントライダー シミュレーター", value: lidar }
+          - { label: "周波数安定化シミュレーター", value: lock }
+          - { label: "コヒーレント光結合シミュレーター", value: combine }
+          - { label: "吸収線シミュレーター", value: absorption }
+          - { label: "光増幅シミュレーター", value: amp }
+          - { label: "電気光学変調コム シミュレーター", value: eocomb }
+          - { label: "レーザー誘起蛍光シミュレーター", value: lif }
+          - { label: "レーザー冷却シミュレーター", value: cooling }
+          - { label: "ハイパースペクトルイメージング シミュレーター", value: hyper }
+          - { label: "レーザー誘起抽出シミュレーター", value: extract }
+      - label: "2つめのシミュレーター(1つめの下に続けて表示)"
+        name: simulator2
+        widget: select
+        required: false
+        options:
+          - { label: "モード同期シミュレーター", value: modelock }
+          - { label: "光周波数コム(frep・fceo)シミュレーター", value: comb }
+          - { label: "コヒーレントライダー シミュレーター", value: lidar }
+          - { label: "周波数安定化シミュレーター", value: lock }
+          - { label: "コヒーレント光結合シミュレーター", value: combine }
+          - { label: "吸収線シミュレーター", value: absorption }
+          - { label: "光増幅シミュレーター", value: amp }
+          - { label: "電気光学変調コム シミュレーター", value: eocomb }
+          - { label: "レーザー誘起蛍光シミュレーター", value: lif }
+          - { label: "レーザー冷却シミュレーター", value: cooling }
+          - { label: "ハイパースペクトルイメージング シミュレーター", value: hyper }
+          - { label: "レーザー誘起抽出シミュレーター", value: extract }
+      - { label: "関連するお試し課題のファイル名(例: tof)", name: challenge, widget: string, required: false, hint: "その課題が公開されていれば、リンクが表示されます" }
+      - { label: "下書き(チェックしている間は公開されない)", name: draft, widget: boolean, default: true }
+      - { label: "本文", name: body, widget: markdown }
+
+  - name: columns
+    label: "コラム"
+    label_singular: "コラム"
+    folder: "src/content/columns"
+    create: true
+    delete: true
+    extension: md
+    format: frontmatter
+    fields:
+      - { label: "題名", name: title, widget: string }
+      - label: "種類"
+        name: kind
+        widget: select
+        default: research
+        options:
+          - { label: "研究と社会をつなぐコラム", value: research }
+          - { label: "教員コラム", value: essay }
+      - { label: "概要(一覧に表示される短い説明)", name: summary, widget: text, required: false }
+      - { label: "表示順(小さいほど上に表示)", name: order, widget: number, default: 100, value_type: int }
+      - { label: "下書き(チェックしている間は公開されない)", name: draft, widget: boolean, default: true }
+      - { label: "本文", name: body, widget: markdown }
+
+  - name: posts
+    label: "学生の記事"
+    label_singular: "記事"
+    folder: "src/content/posts"
+    create: true
+    delete: true
+    slug: "{{year}}-{{month}}-{{day}}-{{slug}}"
+    extension: md
+    format: frontmatter
+    fields:
+      - { label: "題名", name: title, widget: string }
+      - label: "種類"
+        name: kind
+        widget: select
+        options:
+          - { label: "レーザー製作記", value: laser }
+          - { label: "学会・イベント参加記", value: conference }
+          - { label: "技術メモ", value: tech }
+          - { label: "研究室の日常", value: life }
+      - label: "日付"
+        name: date
+        widget: datetime
+        format: "YYYY-MM-DD"
+        date_format: "YYYY-MM-DD"
+        time_format: false
+      - { label: "執筆者(氏名またはイニシャル)", name: author, widget: string, required: false, hint: "氏名の掲載を希望しない場合はイニシャル(例: T.Y.)にしてください" }
+      - { label: "学年など (例: 学部4年, 修士1年)", name: grade, widget: string, required: false }
+      - { label: "概要(一覧に表示される短い説明)", name: excerpt, widget: text, required: false }
+      - { label: "下書き(教員が内容を確認するまでチェックしたままにする)", name: draft, widget: boolean, default: true }
+      - { label: "本文", name: body, widget: markdown }
+
+  - name: challenges
+    label: "お試し課題"
+    label_singular: "お試し課題"
+    folder: "src/content/challenges"
+    create: true
+    delete: true
+    extension: md
+    format: frontmatter
+    fields:
+      - { label: "題名", name: title, widget: string }
+      - { label: "概要(一覧に表示される短い説明)", name: summary, widget: text, required: false }
+      - label: "難しさ"
+        name: level
+        widget: select
+        default: 1
+        options:
+          - { label: "★☆☆ やさしい", value: 1 }
+          - { label: "★★☆ ふつう", value: 2 }
+          - { label: "★★★ 歯ごたえあり", value: 3 }
+      - { label: "レーザーを使う部分がある(「研究室での体験がおすすめ」と表示)", name: usesLaser, widget: boolean, default: false }
+      - label: "シミュレーター"
+        name: simulator
+        widget: select
+        required: false
+        options:
+          - { label: "回折格子シミュレーター (grating)", value: grating }
+          - { label: "ToF距離計測シミュレーター (tof)", value: tof }
+          - { label: "マイケルソン干渉計シミュレーター (michelson)", value: michelson }
+          - { label: "光マイクロホン シミュレーター (mic)", value: mic }
+          - { label: "BB84プロトコル シミュレーター (bb84)", value: bb84 }
+          - { label: "量子ゼノン効果シミュレーター (zeno)", value: zeno }
+        hint: "本文中の <div data-sim=\"grating\"></div> のように、かっこ内の名前を書いた位置に表示されます"
+      - { label: "表示順(小さいほど上に表示)", name: order, widget: number, default: 100, value_type: int }
+      - { label: "下書き(チェックしている間は公開されない)", name: draft, widget: boolean, default: true }
+      - { label: "本文", name: body, widget: markdown }
+
+  - name: guides
+    label: "「研究室で学ぶ」の説明ページ"
+    label_singular: "説明ページ"
+    folder: "src/content/guides"
+    create: true
+    delete: true
+    extension: md
+    format: frontmatter
+    fields:
+      - { label: "題名", name: title, widget: string }
+      - { label: "概要(一覧に表示される短い説明)", name: summary, widget: text, required: false }
+      - { label: "表示順(小さいほど上に表示)", name: order, widget: number, default: 100, value_type: int }
+      - { label: "本文を見出しごとに折りたたむ(短いページでは外す)", name: fold, widget: boolean, default: true }
+      - { label: "下書き(チェックしている間は公開されない)", name: draft, widget: boolean, default: true }
+      - { label: "本文", name: body, widget: markdown }
+
+  - name: teaching
+    label: "教育・アウトリーチ"
+    label_singular: "講義"
+    folder: "src/content/teaching"
+    create: true
+    delete: true
+    extension: md
+    format: frontmatter
+    media_folder: "/public/uploads/teaching"
+    public_folder: "/uploads/teaching"
+    fields:
+      - { label: "題名(講義名・講演名)", name: title, widget: string }
+      - label: "種類"
+        name: kind
+        widget: select
+        default: course
+        options:
+          - { label: "学内の講義", value: course }
+          - { label: "学外講義・出前授業", value: outreach }
+      - { label: "時期 (例: 2025年度 前期, 2025年8月)", name: period, widget: string, required: false }
+      - { label: "対象 (例: 学部2年, 高校生, 一般)", name: audience, widget: string, required: false }
+      - { label: "開催先(学外講義のみ)", name: place, widget: string, required: false }
+      - { label: "概要(一覧に表示される短い説明)", name: summary, widget: text, required: false }
+      - label: "資料"
+        name: materials
+        widget: list
+        required: false
+        fields:
+          - { label: "表示名 (例: 第1回 講義ノート)", name: label, widget: string }
+          - label: "資料の種類"
+            name: type
+            widget: select
+            default: other
+            options:
+              - { label: "講義ノート", value: note }
+              - { label: "スライド", value: slides }
+              - { label: "試験問題", value: exam }
+              - { label: "動画", value: video }
+              - { label: "その他", value: other }
+          - { label: "ファイル(PDFなどをアップロード)、または外部のURL", name: file, widget: file, hint: "大きな動画は、YouTubeなどに置いてURLを入れてください" }
+      - { label: "表示順(小さいほど上に表示)", name: order, widget: number, default: 100, value_type: int }
+      - { label: "下書き(資料の公開に問題がないことを確認するまでチェックしたままにする)", name: draft, widget: boolean, default: true }
+      - { label: "本文", name: body, widget: markdown, required: false }
+
   - name: members
     label: "メンバー"
     label_singular: "メンバー"
@@ -120,4 +485,13 @@ collections:
         widget: string
         required: false
         hint: "例: 半導体、自動車、電機 (主に卒業生向け)"
+      - label: "経歴(主に教員向け。古い順に並べる)"
+        name: career
+        widget: list
+        required: false
+        default: []
+        hint: "受賞と委員会は、researchmap から毎日自動で取り込みます(ここには書かなくてよい)"
+        fields:
+          - { label: "時期 (例: 2024年4月〜)", name: period, widget: string }
+          - { label: "内容", name: text, widget: string }
       - { label: "表示順(小さいほど上に表示)", name: order, widget: number, default: 100, value_type: int }

@@ -1,0 +1,245 @@
+---
+// 回折格子シミュレーター(お試し課題「グレーティング型分光器」用)。
+// 本文(Markdown)の中に <div data-sim="grating"></div> と書くと、その位置に表示される。
+// 置き場所が無いときは、本文の最後に表示される。
+---
+
+<div class="sim" data-sim-root="grating">
+  <p class="sim__title">回折格子シミュレーター</p>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>光源</span>
+      <select data-role="source">
+        <option value="white-led">白色LED</option>
+        <option value="fluorescent">蛍光灯</option>
+        <option value="rgb">スマートフォンの画面(白)</option>
+        <option value="red-laser">赤色レーザーポインター(650 nm)</option>
+        <option value="green-laser">緑色レーザーポインター(532 nm)</option>
+        <option value="sodium">ナトリウムランプ(589 nm)</option>
+      </select>
+    </label>
+
+    <label class="sim__field">
+      <span>回折格子</span>
+      <select data-role="preset">
+        <option value="1.6">CD(溝の間隔 1.6 µm)</option>
+        <option value="0.74">DVD(溝の間隔 0.74 µm)</option>
+        <option value="1">回折格子シート 1000本/mm(1.0 µm)</option>
+        <option value="2">回折格子シート 500本/mm(2.0 µm)</option>
+        <option value="custom">自分で決める</option>
+      </select>
+    </label>
+
+    <label class="sim__field sim__field--wide">
+      <span>溝の間隔 d: <output data-role="d-out">1.60</output> µm</span>
+      <input data-role="d" type="range" min="0.5" max="3" step="0.01" value="1.6" />
+    </label>
+
+    <label class="sim__field sim__field--wide">
+      <span>調べる波長 λ: <output data-role="lambda-out">550</output> nm</span>
+      <input data-role="lambda" type="range" min="400" max="700" step="1" value="550" />
+    </label>
+  </div>
+
+  <canvas data-role="canvas" width="900" height="200" role="img" aria-label="回折格子を通った光が、角度ごとにどう分かれるかを示した図"
+  ></canvas>
+  <p class="sim__caption">
+    横軸は、回折格子からまっすぐ進む向きを0°としたときの角度です。中央(0°)が0次の光、その外側が1次、さらに外側が2次の光です。白い三角は、「調べる波長」の光が出る角度を示します。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+</div>
+
+<script>
+  type Line = { center: number; width: number; amp: number };
+
+  // 光源のスペクトル(中心波長[nm]、幅[nm]、強さ)。おおよその形を再現したもの。
+  const SOURCES: Record<string, Line[]> = {
+    "white-led": [
+      { center: 452, width: 11, amp: 1.0 },
+      { center: 565, width: 55, amp: 0.75 },
+    ],
+    fluorescent: [
+      { center: 405, width: 2, amp: 0.35 },
+      { center: 436, width: 2, amp: 0.8 },
+      { center: 488, width: 14, amp: 0.25 },
+      { center: 546, width: 2, amp: 1.0 },
+      { center: 578, width: 2.5, amp: 0.45 },
+      { center: 611, width: 4, amp: 0.9 },
+    ],
+    rgb: [
+      { center: 455, width: 10, amp: 1.0 },
+      { center: 535, width: 16, amp: 0.85 },
+      { center: 620, width: 14, amp: 0.8 },
+    ],
+    "red-laser": [{ center: 650, width: 1.2, amp: 1.0 }],
+    "green-laser": [{ center: 532, width: 1.2, amp: 1.0 }],
+    sodium: [{ center: 589, width: 1.5, amp: 1.0 }],
+  };
+
+  const intensity = (lines: Line[], nm: number): number => {
+    let v = 0;
+    for (const l of lines) v += l.amp * Math.exp(-0.5 * ((nm - l.center) / l.width) ** 2);
+    return v;
+  };
+
+  // 波長[nm] → 画面上の色(おおよその近似)
+  const wavelengthToRgb = (nm: number): [number, number, number] => {
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (nm >= 380 && nm < 440) {
+      r = -(nm - 440) / 60;
+      b = 1;
+    } else if (nm < 490) {
+      g = (nm - 440) / 50;
+      b = 1;
+    } else if (nm < 510) {
+      g = 1;
+      b = -(nm - 510) / 20;
+    } else if (nm < 580) {
+      r = (nm - 510) / 70;
+      g = 1;
+    } else if (nm < 645) {
+      r = 1;
+      g = -(nm - 645) / 65;
+    } else if (nm <= 750) {
+      r = 1;
+    }
+    let f = 0;
+    if (nm >= 380 && nm < 420) f = 0.3 + (0.7 * (nm - 380)) / 40;
+    else if (nm >= 420 && nm <= 700) f = 1;
+    else if (nm > 700 && nm <= 750) f = 0.3 + (0.7 * (750 - nm)) / 50;
+    return [r * f, g * f, b * f];
+  };
+
+  const setup = (root: HTMLElement) => {
+    // 本文中に置き場所(<div data-sim="grating">)があれば、そこへ移動する
+    const slot = document.querySelector<HTMLElement>('[data-sim="grating"]');
+    if (slot && !slot.contains(root)) slot.appendChild(root);
+
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const source = q<HTMLSelectElement>("source");
+    const preset = q<HTMLSelectElement>("preset");
+    const dInput = q<HTMLInputElement>("d");
+    const dOut = q<HTMLOutputElement>("d-out");
+    const lambdaInput = q<HTMLInputElement>("lambda");
+    const lambdaOut = q<HTMLOutputElement>("lambda-out");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const BAND_TOP = 28;
+    const BAND_BOTTOM = H - 34;
+    const MAX_DEG = 90;
+    const xOf = (deg: number) => ((deg + MAX_DEG) / (2 * MAX_DEG)) * (W - 1);
+
+    const draw = () => {
+      const d = Number(dInput.value); // µm
+      const lambda = Number(lambdaInput.value); // nm
+      const lines = SOURCES[source.value] ?? SOURCES["white-led"];
+      dOut.value = d.toFixed(2);
+      lambdaOut.value = String(lambda);
+
+      // 角度ごとに、届く光の色を足し合わせる
+      const acc = new Float32Array(W * 3);
+      for (let m = -3; m <= 3; m++) {
+        const orderGain = m === 0 ? 0.5 : 1 / (1 + 0.6 * (Math.abs(m) - 1));
+        for (let nm = 380; nm <= 750; nm += 0.5) {
+          const s = (m * nm) / (d * 1000);
+          if (Math.abs(s) > 1) continue;
+          const deg = (Math.asin(s) * 180) / Math.PI;
+          const x = Math.round(xOf(deg));
+          const i = intensity(lines, nm);
+          if (i < 0.002) continue;
+          const [r, g, b] = wavelengthToRgb(nm);
+          for (let k = -1; k <= 1; k++) {
+            const xx = x + k;
+            if (xx < 0 || xx >= W) continue;
+            const w = (k === 0 ? 0.6 : 0.2) * i * orderGain;
+            acc[xx * 3] += r * w;
+            acc[xx * 3 + 1] += g * w;
+            acc[xx * 3 + 2] += b * w;
+          }
+        }
+      }
+      let max = 0;
+      for (let i = 0; i < acc.length; i++) if (acc[i] > max) max = acc[i];
+      const scale = max > 0 ? 1 / max : 0;
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      for (let x = 0; x < W; x++) {
+        const r = Math.min(1, Math.pow(acc[x * 3] * scale, 0.6));
+        const g = Math.min(1, Math.pow(acc[x * 3 + 1] * scale, 0.6));
+        const b = Math.min(1, Math.pow(acc[x * 3 + 2] * scale, 0.6));
+        if (r + g + b < 0.01) continue;
+        ctx.fillStyle = `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
+        ctx.fillRect(x, BAND_TOP, 1, BAND_BOTTOM - BAND_TOP);
+      }
+
+      // 角度の目盛り
+      ctx.fillStyle = "#c8c8d0";
+      ctx.strokeStyle = "#5a5a66";
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "center";
+      for (let deg = -90; deg <= 90; deg += 15) {
+        const x = xOf(deg);
+        ctx.beginPath();
+        ctx.moveTo(x + 0.5, BAND_BOTTOM);
+        ctx.lineTo(x + 0.5, BAND_BOTTOM + 6);
+        ctx.stroke();
+        if (deg % 30 === 0) {
+          const tx = Math.min(W - 16, Math.max(16, x));
+          ctx.fillText(`${deg}°`, tx, H - 10);
+        }
+      }
+
+      // 「調べる波長」の位置を示す三角と、次数のラベル
+      const parts: string[] = [];
+      for (let m = 1; m <= 3; m++) {
+        const s = (m * lambda) / (d * 1000);
+        if (s > 1) {
+          parts.push(`${m}次: 出ません(mλ/d が1を超えるため)`);
+          continue;
+        }
+        const deg = (Math.asin(s) * 180) / Math.PI;
+        parts.push(`${m}次: ${deg.toFixed(1)}°`);
+        for (const sign of [-1, 1]) {
+          const x = xOf(sign * deg);
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.moveTo(x, BAND_TOP - 2);
+          ctx.lineTo(x - 6, BAND_TOP - 13);
+          ctx.lineTo(x + 6, BAND_TOP - 13);
+          ctx.closePath();
+          ctx.fill();
+          const tx = Math.min(W - 18, Math.max(18, x));
+          ctx.fillText(`${m}次`, tx, BAND_TOP - 16);
+        }
+      }
+      readout.textContent = `d = ${d.toFixed(2)} µm、λ = ${lambda} nm のとき、回折角は ${parts.join(" / ")}`;
+    };
+
+    preset.addEventListener("change", () => {
+      if (preset.value !== "custom") dInput.value = preset.value;
+      draw();
+    });
+    dInput.addEventListener("input", () => {
+      const match = [...preset.options].find(
+        (o) => o.value !== "custom" && Math.abs(Number(o.value) - Number(dInput.value)) < 0.005,
+      );
+      preset.value = match ? match.value : "custom";
+      draw();
+    });
+    source.addEventListener("change", draw);
+    lambdaInput.addEventListener("input", draw);
+    draw();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="grating"]').forEach(setup);
+</script>

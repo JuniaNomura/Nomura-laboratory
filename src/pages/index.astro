@@ -3,6 +3,9 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import { getCollection } from "astro:content";
 import { siteConfig } from "../config/site";
 import { withBase } from "../utils/url";
+import { loadLab } from "../utils/lab";
+
+const lab = loadLab();
 
 const news = (await getCollection("news", ({ data }) => !data.draft))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
@@ -15,8 +18,38 @@ const formatDate = (d: Date) =>
 <BaseLayout title={siteConfig.labNameJa}>
   <section>
     <h1>{siteConfig.labNameJa}</h1>
-    <p class="page-lead">{siteConfig.descriptionJa}</p>
+    <p class="page-lead">{lab.intro ?? siteConfig.descriptionJa}</p>
+    {lab.footnote && <p class="stat-note">{lab.footnote}</p>}
   </section>
+
+  {
+    (lab.mottos?.length ?? 0) > 0 && (
+      <section>
+        <h2>この研究室が大切にしている言葉</h2>
+        <div class="motto-list">
+          {lab.mottos?.map((m) => (
+            <figure class="motto">
+              <blockquote lang="en" class="motto__quote">{m.quote}</blockquote>
+              {m.translation && <p class="motto__translation">{m.translation}</p>}
+              {m.text && <p class="motto__text">{m.text}</p>}
+              {m.author && <figcaption class="motto__author">{m.author}</figcaption>}
+              {m.reference && (
+                <p class="motto__ref">
+                  {m.referenceUrl ? (
+                    <a href={m.referenceUrl} target="_blank" rel="noopener">
+                      {m.reference}
+                    </a>
+                  ) : (
+                    m.reference
+                  )}
+                </p>
+              )}
+            </figure>
+          ))}
+        </div>
+      </section>
+    )
+  }
 
   <section>
     <h2>お知らせ</h2>

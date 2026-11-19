@@ -1,0 +1,694 @@
+---
+// ハイパースペクトルイメージングのシミュレーター(研究内容「新奇ハイパースペクトルイメージング」用)。
+// コンクリートの板を、光からマイクロ波まで、波長を連続的に変えながら上から撮影したときの見え方を示す。
+// 波長が短いほど細かく見え、波長が長いほど奥まで届く。画素をクリックすると、その場所の「波長ごとの明るさ」が出る。
+// 物理は大きく単純化した概念モデルで、数値は仮のもの。
+// 研究テーマの frontmatter に simulator: "hyper" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="hyper">
+  <p class="sim__title">ハイパースペクトルイメージング シミュレーター: 波長を変えると、見えるものが変わる</p>
+
+  <div class="sim__controls">
+    <label class="sim__field sim__field--wide">
+      <span>電磁波の波長: <output data-role="wl-out">0.5 μm</output>(<output data-role="band-out">可視光</output>)</span>
+      <input data-role="wl" type="range" min="0" max="1000" step="1" value="20" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="p-light">光(0.5 μm)</button>
+    <button type="button" data-role="p-thz">テラヘルツ波(0.3 mm)</button>
+    <button type="button" data-role="p-mw">マイクロ波(2 cm)</button>
+    <button type="button" data-role="fuse" aria-pressed="false">3つを重ね合わせる: 切</button>
+    <button type="button" data-role="answer" aria-pressed="false">答え合わせ(隠れているもの): 切</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="470"
+    role="img"
+    aria-label="左に、コンクリートの板を上から撮影した画像と、波長の帯。右上に、板の断面の模式図と、電磁波が届く深さ。右下に、クリックした場所の、波長ごとの明るさのグラフ"
+  ></canvas>
+  <p class="sim__caption">
+    左は、コンクリートの板(横30 cm × 縦20 cm)を、いまの波長の電磁波で上から撮影した画像です。明るさを白黒で表しています。板の表面や内部には、いくつかのものが隠れています。右上は、その断面の模式図で、暗い部分には電磁波が届きません。画像をクリックすると、その場所を、あらゆる波長で撮影したときの明るさが、右下のグラフ(その場所のスペクトル)に出ます。画素ごとにこのグラフを持つ画像が、ハイパースペクトル画像です。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+
+  <p class="sim__caption">
+    実際の例: 可視光の波長は0.4〜0.7 μm、テラヘルツ波は約30 μm〜3 mm(周波数0.1〜10 THz)、ミリ波は1〜10 mm(30〜300 GHz)、マイクロ波は数 cm 程度です。研究室で扱う100 GHz帯(波長3 mm)や300 GHz帯(波長1 mm)の電磁波は、テラヘルツ波とミリ波の境目あたりにあります。このシミュレーターは、考え方を示すための単純なモデルです。「見分けられる細かさは波長くらい」「波長が長いほど奥まで届く」「水はテラヘルツ波をよく吸収する」「金属は電磁波をよく反射する」という性質だけを使っていて、届く深さなどの数値は、仮のものです。
+  </p>
+</div>
+
+<script>
+  const W = 900;
+  const H = 470;
+  // 板の大きさ(mm)と、計算に使うます目
+  const PLATE_W = 300;
+  const PLATE_H = 200;
+  const CELL = 2; // ます目1つの大きさ(mm)
+  const NX = PLATE_W / CELL;
+  const NY = PLATE_H / CELL;
+  // 画像の表示位置
+  const IL = 20;
+  const IT = 34;
+  const IW = 450;
+  const IH = 300;
+  // 波長の範囲(mm、対数)
+  const LOG_MIN = Math.log10(0.0004);
+  const LOG_MAX = Math.log10(30);
+  const BASE = 0.62; // 健全なコンクリートの明るさ
+  const PRESETS = { light: 0.0005, thz: 0.3, mw: 20 };
+
+  // 届く深さ(mm)。波長が長いほど深い(概念を示すための仮の式)
+  const depthOf = (wl: number): number => 10 ** (-1.699 + 0.866 * (Math.log10(wl) + 3));
+  // 見分けられる細かさ(mm)。波長くらい
+  const resOf = (wl: number): number => wl;
+  const bandOf = (wl: number): string =>
+    wl < 0.0004 ? "紫外線" : wl < 0.00075 ? "可視光" : wl < 0.03 ? "赤外線" : wl < 1 ? "テラヘルツ波" : wl < 10 ? "ミリ波" : "マイクロ波";
+  const fmt = (mm: number): string =>
+    mm < 0.001 ? `${(mm * 1e6).toFixed(0)} nm` : mm < 1 ? `${+(mm * 1000).toPrecision(2)} μm` : mm < 10 ? `${+mm.toPrecision(2)} mm` : `${+(mm / 10).toPrecision(2)} cm`;
+  const smooth = (x: number, a: number, b: number) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+
+  // 隠れているもの: 形(ます目ごとの割合)、深さ(mm)、波長ごとの明るさの変化
+  interface Feature {
+    name: string;
+    depth: number;
+    mask: Float32Array;
+    signal: (wl: number) => number;
+    outline: (ctx: CanvasRenderingContext2D, sx: (x: number) => number, sy: (y: number) => number) => void;
+    label: [number, number];
+    section: { x0: number; x1: number; d0: number; d1: number; kind: "line" | "box" | "circle" | "ellipse" };
+  }
+
+  const ellipseMask = (cx: number, cy: number, rx: number, ry: number): Float32Array => {
+    const m = new Float32Array(NX * NY);
+    for (let j = 0; j < NY; j++)
+      for (let i = 0; i < NX; i++) {
+        // ます目の中を4点で調べて、なめらかにする
+        let c = 0;
+        for (const [ox, oy] of [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]]) {
+          const x = (i + ox) * CELL;
+          const y = (j + oy) * CELL;
+          if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) c++;
+        }
+        m[j * NX + i] = c / 4;
+      }
+    return m;
+  };
+  const CRACK: [number, number][] = [
+    [30, 26],
+    [52, 44],
+    [60, 40],
+    [82, 66],
+    [92, 64],
+    [116, 96],
+  ];
+  const crackMask = (): Float32Array => {
+    const m = new Float32Array(NX * NY);
+    const width = 1; // ひびの幅(mm)
+    for (let j = 0; j < NY; j++)
+      for (let i = 0; i < NX; i++) {
+        const x = (i + 0.5) * CELL;
+        const y = (j + 0.5) * CELL;
+        let dmin = 1e9;
+        for (let k = 1; k < CRACK.length; k++) {
+          const [x1, y1] = CRACK[k - 1];
+          const [x2, y2] = CRACK[k];
+          const t = Math.max(0, Math.min(1, ((x - x1) * (x2 - x1) + (y - y1) * (y2 - y1)) / ((x2 - x1) ** 2 + (y2 - y1) ** 2)));
+          dmin = Math.min(dmin, Math.hypot(x - x1 - t * (x2 - x1), y - y1 - t * (y2 - y1)));
+        }
+        // 幅1 mmのひびが、2 mmのます目に占める割合
+        m[j * NX + i] = Math.max(0, Math.min(1, (width / CELL) * (1.5 - dmin / CELL)));
+      }
+    return m;
+  };
+  const barMask = (x0: number, x1: number): Float32Array => {
+    const m = new Float32Array(NX * NY);
+    for (let j = 0; j < NY; j++)
+      for (let i = 0; i < NX; i++) {
+        const a = Math.max(x0, i * CELL);
+        const b = Math.min(x1, (i + 1) * CELL);
+        m[j * NX + i] = Math.max(0, b - a) / CELL;
+      }
+    return m;
+  };
+
+  const ellipseOutline = (cx: number, cy: number, rx: number, ry: number) =>
+    (ctx: CanvasRenderingContext2D, sx: (x: number) => number, sy: (y: number) => number) => {
+      ctx.beginPath();
+      ctx.ellipse(sx(cx), sy(cy), sx(rx) - sx(0), sy(ry) - sy(0), 0, 0, Math.PI * 2);
+      ctx.stroke();
+    };
+
+  const FEATURES: Feature[] = [
+    {
+      name: "表面の細いひび(幅1 mm)",
+      depth: 0,
+      mask: crackMask(),
+      signal: () => -1.1,
+      outline: (ctx, sx, sy) => {
+        ctx.beginPath();
+        CRACK.forEach(([x, y], k) => (k === 0 ? ctx.moveTo(sx(x), sy(y)) : ctx.lineTo(sx(x), sy(y))));
+        ctx.stroke();
+      },
+      label: [30, 16],
+      section: { x0: 30, x1: 116, d0: 0, d1: 3, kind: "line" },
+    },
+    {
+      name: "表面のしみ(色だけが違う)",
+      depth: 0,
+      mask: ellipseMask(232, 46, 32, 20),
+      // 可視光でだけ、まわりと明るさが違う
+      signal: (wl) => -0.4 * Math.exp(-(((Math.log10(wl) - Math.log10(0.00052)) / 0.12) ** 2)),
+      outline: ellipseOutline(232, 46, 32, 20),
+      label: [200, 20],
+      section: { x0: 200, x1: 264, d0: 0, d1: 0.6, kind: "box" },
+    },
+    {
+      name: "しみ込んだ水(深さ1 mm)",
+      depth: 1,
+      mask: ellipseMask(88, 152, 46, 30),
+      // 水は、赤外線より長い波長の電磁波をよく吸収する。ただし、水の層(厚さ数 mm)より波長がずっと長くなると、
+      // 薄い層の影響は小さくなる
+      signal: (wl) =>
+        -0.6 *
+        (0.25 + 0.75 * smooth(Math.log10(wl), Math.log10(0.003), Math.log10(0.05))) *
+        (1 - 0.65 * smooth(Math.log10(wl), Math.log10(3), Math.log10(25))),
+      outline: ellipseOutline(88, 152, 46, 30),
+      label: [50, 188],
+      section: { x0: 42, x1: 134, d0: 0.5, d1: 4, kind: "box" },
+    },
+    {
+      name: "鉄筋(深さ3.5 cm)",
+      depth: 35,
+      mask: barMask(146, 158),
+      // 金属は、電磁波をよく反射する
+      signal: () => 0.9,
+      outline: (ctx, sx, sy) => {
+        ctx.strokeRect(sx(146), sy(0), sx(158) - sx(146), sy(PLATE_H) - sy(0));
+      },
+      label: [162, 112],
+      section: { x0: 146, x1: 158, d0: 29, d1: 41, kind: "circle" },
+    },
+    {
+      name: "内部の空洞(深さ5 cm)",
+      depth: 50,
+      mask: ellipseMask(222, 138, 34, 28),
+      signal: () => 0.7,
+      outline: ellipseOutline(222, 138, 34, 28),
+      label: [196, 180],
+      section: { x0: 188, x1: 256, d0: 44, d1: 60, kind: "ellipse" },
+    },
+  ];
+
+  // 表面の模様(コンクリートの中の砂利)。毎回同じ模様になるよう、決まった乱数を使う
+  const texture = (() => {
+    let s = 12345;
+    const rand = () => {
+      s = (s * 1103515245 + 12345) % 2147483648;
+      return s / 2147483648;
+    };
+    const t = new Float32Array(NX * NY);
+    for (let k = 0; k < 260; k++) {
+      const cx = rand() * NX;
+      const cy = rand() * NY;
+      const r = 1 + rand() * 2.5;
+      const v = (rand() - 0.5) * 0.35;
+      for (let j = Math.max(0, Math.floor(cy - r)); j < Math.min(NY, Math.ceil(cy + r)); j++)
+        for (let i = Math.max(0, Math.floor(cx - r)); i < Math.min(NX, Math.ceil(cx + r)); i++)
+          if ((i - cx) ** 2 + (j - cy) ** 2 <= r * r) t[j * NX + i] += v;
+    }
+    for (let k = 0; k < t.length; k++) t[k] += (rand() - 0.5) * 0.06;
+    return t;
+  })();
+
+  // ぼかす前の明るさ(ます目ごと)
+  const rawImage = (wl: number): Float32Array => {
+    const delta = depthOf(wl);
+    const img = new Float32Array(NX * NY).fill(BASE);
+    for (let k = 0; k < img.length; k++) img[k] += texture[k];
+    for (const f of FEATURES) {
+      const a = f.signal(wl) * Math.exp((-2 * f.depth) / delta);
+      if (Math.abs(a) < 1e-4) continue;
+      for (let k = 0; k < img.length; k++) if (f.mask[k] > 0) img[k] += a * f.mask[k];
+    }
+    return img;
+  };
+
+  const kernelOf = (sigma: number): number[] => {
+    const r = Math.ceil(3 * sigma);
+    const k: number[] = [];
+    let sum = 0;
+    for (let i = -r; i <= r; i++) {
+      const v = Math.exp(-(i * i) / (2 * sigma * sigma));
+      k.push(v);
+      sum += v;
+    }
+    return k.map((v) => v / sum);
+  };
+  // 波長くらいの大きさより細かいものは見分けられない(ぼかしで表す)
+  const blur = (img: Float32Array, sigma: number): Float32Array => {
+    if (sigma < 0.3) return img;
+    const k = kernelOf(sigma);
+    const r = (k.length - 1) / 2;
+    const tmp = new Float32Array(img.length);
+    const out = new Float32Array(img.length);
+    for (let j = 0; j < NY; j++)
+      for (let i = 0; i < NX; i++) {
+        let s = 0;
+        for (let d = -r; d <= r; d++) s += k[d + r] * img[j * NX + Math.max(0, Math.min(NX - 1, i + d))];
+        tmp[j * NX + i] = s;
+      }
+    for (let j = 0; j < NY; j++)
+      for (let i = 0; i < NX; i++) {
+        let s = 0;
+        for (let d = -r; d <= r; d++) s += k[d + r] * tmp[Math.max(0, Math.min(NY - 1, j + d)) * NX + i];
+        out[j * NX + i] = s;
+      }
+    return out;
+  };
+  const imageAt = (wl: number) => blur(rawImage(wl), (0.5 * resOf(wl)) / CELL);
+
+  // 1つのます目の、ぼかしたあとの明るさ(スペクトルのグラフ用)
+  const valueAt = (wl: number, ci: number, cj: number): number => {
+    const sigma = (0.5 * resOf(wl)) / CELL;
+    const delta = depthOf(wl);
+    const amps = FEATURES.map((f) => f.signal(wl) * Math.exp((-2 * f.depth) / delta));
+    const raw = (i: number, j: number) => {
+      const k = Math.max(0, Math.min(NY - 1, j)) * NX + Math.max(0, Math.min(NX - 1, i));
+      let v = BASE + texture[k];
+      FEATURES.forEach((f, n) => (v += amps[n] * f.mask[k]));
+      return v;
+    };
+    if (sigma < 0.3) return raw(ci, cj);
+    const k = kernelOf(sigma);
+    const r = (k.length - 1) / 2;
+    let s = 0;
+    for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) s += k[di + r] * k[dj + r] * raw(ci + di, cj + dj);
+    return s;
+  };
+
+  const setup = (root: HTMLElement) => {
+    const q = <E extends HTMLElement>(role: string) => root.querySelector<E>(`[data-role="${role}"]`)!;
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const wlIn = q<HTMLInputElement>("wl");
+    const readout = q<HTMLElement>("readout");
+    const off = document.createElement("canvas");
+    off.width = NX;
+    off.height = NY;
+    const octx = off.getContext("2d");
+    if (!octx) return;
+    const pixels = octx.createImageData(NX, NY);
+
+    const on = { fuse: false, answer: false };
+    const names = { fuse: "3つを重ね合わせる", answer: "答え合わせ(隠れているもの)" };
+    // スペクトルを調べる場所(ます目)。最初は、しみ込んだ水の上
+    let probe: [number, number] = [Math.floor(88 / CELL), Math.floor(152 / CELL)];
+    let probeSpec: number[] = [];
+    let refSpec: number[] = [];
+    const SPEC_N = 90;
+    const specWl = (k: number) => 10 ** (LOG_MIN + (k / (SPEC_N - 1)) * (LOG_MAX - LOG_MIN));
+    const REF: [number, number] = [Math.floor(272 / CELL), Math.floor(186 / CELL)]; // 何も隠れていない場所
+
+    const wlOf = (): number => 10 ** (LOG_MIN + (Number(wlIn.value) / 1000) * (LOG_MAX - LOG_MIN));
+    const setWl = (wl: number) => {
+      wlIn.value = String(Math.round(((Math.log10(wl) - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 1000));
+    };
+
+    const computeSpectra = () => {
+      probeSpec = [];
+      refSpec = [];
+      for (let k = 0; k < SPEC_N; k++) {
+        probeSpec.push(valueAt(specWl(k), probe[0], probe[1]));
+        refSpec.push(valueAt(specWl(k), REF[0], REF[1]));
+      }
+    };
+
+    const sx = (x: number) => IL + (x / PLATE_W) * IW;
+    const sy = (y: number) => IT + (y / PLATE_H) * IH;
+
+    const drawImage = (wl: number) => {
+      const d = pixels.data;
+      const to255 = (v: number) => Math.round(255 * Math.max(0, Math.min(1, v)));
+      if (on.fuse) {
+        // 光を赤、テラヘルツ波を緑、マイクロ波を青に割り当てて重ねる
+        const r = imageAt(PRESETS.light);
+        const g = imageAt(PRESETS.thz);
+        const b = imageAt(PRESETS.mw);
+        for (let k = 0; k < NX * NY; k++) {
+          // 健全な部分からの違いを強調して、色を付ける
+          d[4 * k] = to255(0.5 + 1.3 * (r[k] - BASE));
+          d[4 * k + 1] = to255(0.5 + 1.3 * (g[k] - BASE));
+          d[4 * k + 2] = to255(0.5 + 1.3 * (b[k] - BASE));
+          d[4 * k + 3] = 255;
+        }
+      } else {
+        const img = imageAt(wl);
+        for (let k = 0; k < NX * NY; k++) {
+          const v = to255(img[k]);
+          d[4 * k] = v;
+          d[4 * k + 1] = v;
+          d[4 * k + 2] = v;
+          d[4 * k + 3] = 255;
+        }
+      }
+      octx.putImageData(pixels, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(off, IL, IT, IW, IH);
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(IL + 0.5, IT + 0.5, IW, IH);
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText(on.fuse ? "3つの波長の画像を重ねたもの(赤: 光、緑: テラヘルツ波、青: マイクロ波)" : "上から撮影した画像", IL, IT - 10);
+
+      // 答え合わせ
+      if (on.answer) {
+        ctx.strokeStyle = "#ffd84d";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.font = "12px sans-serif";
+        for (const f of FEATURES) {
+          f.outline(ctx, sx, sy);
+        }
+        ctx.setLineDash([]);
+        for (const f of FEATURES) {
+          const [lx, ly] = f.label;
+          const w = ctx.measureText(f.name).width;
+          ctx.fillStyle = "rgba(11, 11, 15, 0.75)";
+          ctx.fillRect(sx(lx) - 3, sy(ly) - 13, w + 6, 17);
+          ctx.fillStyle = "#ffd84d";
+          ctx.fillText(f.name, sx(lx), sy(ly));
+        }
+      }
+
+      // 調べている場所
+      const px = sx((probe[0] + 0.5) * CELL);
+      const py = sy((probe[1] + 0.5) * CELL);
+      ctx.strokeStyle = "#ff5a5a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px - 11, py);
+      ctx.lineTo(px - 4, py);
+      ctx.moveTo(px + 4, py);
+      ctx.lineTo(px + 11, py);
+      ctx.moveTo(px, py - 11);
+      ctx.lineTo(px, py - 4);
+      ctx.moveTo(px, py + 4);
+      ctx.lineTo(px, py + 11);
+      ctx.stroke();
+
+      // 見分けられる細かさの目安
+      if (!on.fuse) {
+        const res = Math.min(PLATE_W / 2, Math.max(resOf(wl), 0.5));
+        const bw = Math.max(2, sx(res) - sx(0));
+        const by = IT + IH + 18;
+        ctx.fillStyle = "#8fd3ff";
+        ctx.fillRect(IL, by - 3, bw, 6);
+        ctx.font = "12px sans-serif";
+        ctx.fillText(`← 見分けられる細かさの目安(${fmt(resOf(wl))})`, IL + bw + 8, by + 4);
+      }
+    };
+
+    // 波長の帯(画像の下)
+    const BANDS: [number, number, string, string][] = [
+      [0.0004, 0.00075, "可視光", "#b58cff"],
+      [0.00075, 0.03, "赤外線", "#ff7a6b"],
+      [0.03, 1, "テラヘルツ波", "#ffb84d"],
+      [1, 10, "ミリ波", "#7fd1a0"],
+      [10, 30, "マイクロ波", "#6fb7ff"],
+    ];
+    const drawBandBar = (wl: number, l: number, r: number, y: number, h: number) => {
+      const xOf = (w: number) => l + ((Math.log10(w) - LOG_MIN) / (LOG_MAX - LOG_MIN)) * (r - l);
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "center";
+      for (const [a, b, name, color] of BANDS) {
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(xOf(a), y, xOf(b) - xOf(a), h);
+        ctx.globalAlpha = 1;
+        ctx.fillText(name, (xOf(a) + xOf(b)) / 2, y + h + 13);
+      }
+      ctx.textAlign = "left";
+      if (wl > 0) {
+        ctx.fillStyle = "#ffffff";
+        const x = xOf(wl);
+        ctx.beginPath();
+        ctx.moveTo(x, y - 2);
+        ctx.lineTo(x - 6, y - 10);
+        ctx.lineTo(x + 6, y - 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillRect(x - 1, y, 2, h);
+      }
+      return xOf;
+    };
+
+    // 断面の模式図
+    const drawSection = (wl: number) => {
+      const l = 500;
+      const r = 880;
+      const t = 40;
+      const b = 190;
+      const D_MAX = 70; // 表示する深さ(mm)
+      const xOf = (x: number) => l + (x / PLATE_W) * (r - l);
+      // 浅いところも見えるよう、深さは平方根の目盛りにする
+      const yOf = (d: number) => t + Math.sqrt(Math.min(D_MAX, d) / D_MAX) * (b - t);
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText("断面の模式図(深さの目盛りは、浅いところを広げています)", l, t - 16);
+      ctx.fillStyle = "#3b3f47";
+      ctx.fillRect(l, t, r - l, b - t);
+      // 隠れているもの
+      for (const f of FEATURES) {
+        const s = f.section;
+        const colors: Record<string, string> = {
+          line: "#111",
+          box: f.name.startsWith("しみ込んだ") ? "#3d7bd6" : "#b06060",
+          circle: "#c9ccd2",
+          ellipse: "#0b0b0f",
+        };
+        ctx.fillStyle = colors[s.kind];
+        if (s.kind === "line") {
+          // ひび(表面から少し入ったV字の溝)
+          ctx.beginPath();
+          const xm = (xOf(s.x0) + xOf(s.x1)) / 2;
+          ctx.moveTo(xm - 4, yOf(0));
+          ctx.lineTo(xm, yOf(s.d1));
+          ctx.lineTo(xm + 4, yOf(0));
+          ctx.closePath();
+          ctx.fill();
+        } else if (s.kind === "circle") {
+          const cy = (yOf(s.d0) + yOf(s.d1)) / 2;
+          ctx.beginPath();
+          ctx.arc((xOf(s.x0) + xOf(s.x1)) / 2, cy, 6, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (s.kind === "ellipse") {
+          ctx.beginPath();
+          ctx.ellipse((xOf(s.x0) + xOf(s.x1)) / 2, (yOf(s.d0) + yOf(s.d1)) / 2, (xOf(s.x1) - xOf(s.x0)) / 2, (yOf(s.d1) - yOf(s.d0)) / 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(xOf(s.x0), yOf(s.d0), xOf(s.x1) - xOf(s.x0), Math.max(2, yOf(s.d1) - yOf(s.d0)));
+        }
+      }
+      ctx.font = "11px sans-serif";
+      ctx.fillStyle = "#e6e9ef";
+      ctx.fillText("ひび", xOf(62), yOf(0) + 22);
+      ctx.fillText("しみ", xOf(214), yOf(0) + 14);
+      ctx.fillText("水", xOf(82), yOf(4) + 14);
+      ctx.fillText("鉄筋", xOf(164), yOf(35) + 4);
+      ctx.fillText("空洞", xOf(212), yOf(52) + 4);
+
+      // 届かない部分を暗くする(往復で、明るさが1割以下になる深さより下)
+      if (!on.fuse) {
+        const reach = depthOf(wl) * 1.15;
+        if (reach < D_MAX) {
+          ctx.fillStyle = "rgba(0, 0, 0, 0.62)";
+          ctx.fillRect(l, yOf(reach), r - l, b - yOf(reach));
+          ctx.strokeStyle = "#ffb84d";
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          ctx.moveTo(l, yOf(reach));
+          ctx.lineTo(r, yOf(reach));
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "#ffb84d";
+          ctx.textAlign = "right";
+          ctx.fillText(`ここより深くは、ほとんど届かない(約${fmt(reach)})`, r - 4, Math.min(b - 4, yOf(reach) + 14));
+          ctx.textAlign = "left";
+        } else {
+          ctx.fillStyle = "#ffb84d";
+          ctx.textAlign = "right";
+          ctx.fillText("この深さまでなら、届く", r - 4, b - 6);
+          ctx.textAlign = "left";
+        }
+      }
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(l + 0.5, t + 0.5, r - l, b - t);
+      ctx.fillStyle = "#8a93a3";
+      ctx.font = "11px sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("表面", l - 4, t + 10);
+      ctx.fillText("7 cm", l - 4, b);
+      ctx.textAlign = "left";
+    };
+
+    // クリックした場所のスペクトル
+    const drawSpectrum = (wl: number) => {
+      const l = 500;
+      const r = 880;
+      const t = 250;
+      const b = 400;
+      ctx.fillStyle = "#cfd6e2";
+      ctx.font = "13px sans-serif";
+      ctx.fillText("クリックした場所の、波長ごとの明るさ(スペクトル)", l, t - 12);
+      ctx.strokeStyle = "#5a6474";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(l + 0.5, t + 0.5, r - l, b - t);
+      const vMin = 0.0;
+      const vMax = 1.6;
+      const yOf = (v: number) => b - ((Math.max(vMin, Math.min(vMax, v)) - vMin) / (vMax - vMin)) * (b - t);
+      const xOf = (k: number) => l + (k / (SPEC_N - 1)) * (r - l);
+      const curve = (spec: number[], color: string, width: number, dash: number[]) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.setLineDash(dash);
+        ctx.beginPath();
+        spec.forEach((v, k) => (k === 0 ? ctx.moveTo(xOf(k), yOf(v)) : ctx.lineTo(xOf(k), yOf(v))));
+        ctx.stroke();
+        ctx.setLineDash([]);
+      };
+      curve(refSpec, "#8a93a3", 1.5, [5, 4]);
+      curve(probeSpec, "#ff5a5a", 2.2, []);
+      ctx.font = "11px sans-serif";
+      ctx.fillStyle = "#ff8a8a";
+      ctx.fillText("赤: クリックした場所", l + 6, t + 14);
+      ctx.fillStyle = "#aab0be";
+      ctx.fillText("灰の破線: 何も隠れていない場所", l + 6, t + 28);
+      ctx.fillStyle = "#8a93a3";
+      ctx.textAlign = "right";
+      ctx.fillText("明るい", l - 4, t + 10);
+      ctx.fillText("暗い", l - 4, b);
+      ctx.textAlign = "left";
+      drawBandBar(on.fuse ? 0 : wl, l, r, b + 8, 8);
+      ctx.fillStyle = "#8a93a3";
+      ctx.textAlign = "right";
+      ctx.fillText("波長 →(長い)", r, b + 44);
+      ctx.textAlign = "left";
+    };
+
+    let lastText = "";
+    const updateText = (wl: number) => {
+      const band = bandOf(wl);
+      const reach = depthOf(wl) * 1.15;
+      let text: string;
+      if (on.fuse) {
+        text =
+          "光(赤)、テラヘルツ波(緑)、マイクロ波(青)の3枚の画像を、色を分けて重ねました。表面の細いひびとしみは光で、浅いところの水はテラヘルツ波で、奥の鉄筋と空洞はマイクロ波で見えていて、1枚の画像で同時にわかります。これが、波長の大きく違う電磁波を組み合わせる、いいとこ取りの考え方です。";
+      } else {
+        text = `いまの波長は${fmt(wl)}(${band})です。見分けられる細かさはおよそ${fmt(resOf(wl))}、届く深さはおよそ${fmt(reach)}です。`;
+        if (wl < 0.00075)
+          text +=
+            "可視光は、表面しか見えませんが、細いひびや、色だけが違うしみまで、くっきり見えます。中に隠れているものは、まったく見えません。";
+        else if (wl < 0.03)
+          text +=
+            "赤外線は、可視光と同じく、ほぼ表面しか見えません。しみは、色(可視光での見え方)だけが違うので、ここでは見えなくなります。";
+        else if (wl < 1)
+          text +=
+            "テラヘルツ波は、表面から少しだけ中に入ります。水はテラヘルツ波をよく吸収するので、しみ込んだ水が暗く、くっきり見えます。細いひびは、まだ見分けられます。";
+        else if (wl < 10)
+          text +=
+            "ミリ波になると、さらに深くまで届き始めますが、像がぼやけ、細いひびは見えなくなります。";
+        else
+          text +=
+            "マイクロ波は、奥まで届くので、鉄筋や内部の空洞が見えます。ただし、波長が長いので像はぼやけ、表面の細かいものは見えません。浅いところの薄い水の層も、波長よりずっと薄いので、目立たなくなります。";
+      }
+      text += "画像をクリックすると、その場所のスペクトルが右下に出ます。";
+      if (text !== lastText) {
+        readout.textContent = text;
+        lastText = text;
+      }
+    };
+
+    const draw = () => {
+      const wl = wlOf();
+      q<HTMLOutputElement>("wl-out").value = fmt(wl);
+      q<HTMLOutputElement>("band-out").value = bandOf(wl);
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, H);
+      drawImage(wl);
+      if (!on.fuse) {
+        ctx.fillStyle = "#8a93a3";
+        ctx.font = "11px sans-serif";
+        drawBandBar(wl, IL, IL + IW, IT + IH + 44, 10);
+      }
+      drawSection(wl);
+      drawSpectrum(wl);
+      updateText(wl);
+    };
+
+    let pending = false;
+    const requestDraw = () => {
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        pending = false;
+        draw();
+      });
+    };
+
+    wlIn.addEventListener("input", requestDraw);
+    const preset = (role: string, wl: number) =>
+      q<HTMLButtonElement>(role).addEventListener("click", () => {
+        setWl(wl);
+        if (on.fuse) {
+          on.fuse = false;
+          const btn = q<HTMLButtonElement>("fuse");
+          btn.setAttribute("aria-pressed", "false");
+          btn.textContent = `${names.fuse}: 切`;
+        }
+        requestDraw();
+      });
+    preset("p-light", PRESETS.light);
+    preset("p-thz", PRESETS.thz);
+    preset("p-mw", PRESETS.mw);
+    (Object.keys(on) as (keyof typeof on)[]).forEach((key) => {
+      const btn = q<HTMLButtonElement>(key);
+      btn.addEventListener("click", () => {
+        on[key] = !on[key];
+        btn.setAttribute("aria-pressed", String(on[key]));
+        btn.textContent = `${names[key]}: ${on[key] ? "入" : "切"}`;
+        requestDraw();
+      });
+    });
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * W;
+      const y = ((e.clientY - rect.top) / rect.height) * H;
+      if (x < IL || x > IL + IW || y < IT || y > IT + IH) return;
+      probe = [
+        Math.min(NX - 1, Math.floor(((x - IL) / IW) * NX)),
+        Math.min(NY - 1, Math.floor(((y - IT) / IH) * NY)),
+      ];
+      computeSpectra();
+      requestDraw();
+    });
+
+    computeSpectra();
+    draw();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="hyper"]').forEach(setup);
+</script>

@@ -1,0 +1,381 @@
+---
+// 電気光学変調コム シミュレーター(研究内容「電気光学変調コム」用)。
+// CWレーザー → 位相変調器 → 強度変調器 → 分散(光ファイバー)の順に並べ、
+// 部品を入れたり切ったりしながら、スペクトルと時間波形の変化を見る。
+// 研究テーマの frontmatter に simulator: "eocomb" と書くと、研究内容のページに表示される。
+---
+
+<div class="sim" data-sim-root="eocomb">
+  <p class="sim__title">電気光学変調コム シミュレーター: 連続光から、短いパルスの列をつくる</p>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="pm" aria-pressed="false">位相変調器: 切</button>
+    <button type="button" data-role="im" aria-pressed="false">強度変調器: 切</button>
+    <button type="button" data-role="disp" aria-pressed="false">分散(光ファイバー): 切</button>
+  </div>
+
+  <div class="sim__controls">
+    <label class="sim__field">
+      <span>位相変調の深さ: <output data-role="depth-out">6.0</output> ラジアン</span>
+      <input data-role="depth" type="range" min="0.5" max="12" step="0.1" value="6" />
+    </label>
+    <label class="sim__field">
+      <span>変調周波数 fm: <output data-role="fm-out">25</output> GHz</span>
+      <input data-role="fm" type="range" min="10" max="40" step="1" value="25" />
+    </label>
+    <label class="sim__field sim__field--wide">
+      <span>分散の量: <output data-role="amount-out">0.0</output> ps²</span>
+      <input data-role="amount" type="range" min="0" max="100" step="0.1" value="0" />
+    </label>
+  </div>
+
+  <div class="sim__buttons">
+    <button type="button" data-role="best">分散を、パルスが最も短くなる量に合わせる</button>
+  </div>
+
+  <canvas
+    data-role="canvas"
+    width="900"
+    height="430"
+    role="img"
+    aria-label="上に部品の並び、左下に光のスペクトル、右下に光の強さの時間変化"
+  ></canvas>
+  <p class="sim__caption">
+    上は、部品の並びです。左下は、出てくる光のスペクトル(どの周波数の光が、どれだけ含まれているか)です。右下は、光の強さの時間変化(150ピコ秒ぶん)で、線の色は、その瞬間の周波数を表します(青が高く、赤が低い)。位相変調器と強度変調器は、同じ変調信号(周波数 fm)で動かしています。分散は、周波数によって光の進む速さが違う性質で、長い光ファイバーなどで与えます。変調周波数を変えると、スペクトルの線の間隔と、パルスの並ぶ間隔が、同時に変わります。
+  </p>
+
+  <p class="sim__readout" data-role="readout" aria-live="polite"></p>
+
+  <p class="sim__caption">
+    1ピコ秒(ps)は、1兆分の1秒です。変調周波数が25 GHzのとき、パルスは40ピコ秒ごとに並びます。くし(コム)の歯の間隔は、変調信号の周波数そのものなので、電気の信号で正確に決められ、自由に変えられます。実際の装置では、変調を深くするために、位相変調器を何台も直列につなぐことがあります。
+  </p>
+</div>
+
+<script>
+  const M = 256; // 1周期を分ける点の数
+  const HALF = 64; // 計算するサイドバンドの範囲(±)
+  const SPAN_GHZ = 600; // スペクトルの表示範囲(±GHz)
+  const SPAN_PS = 150; // 時間波形の表示範囲(ピコ秒)
+  const FIBER_PS2_PER_M = 0.0217; // 通信用の光ファイバー1 mあたりの分散(波長1550 nm、約21.7 ps²/km)
+  // 分散の量(ps²)を、計算で使う値(サイドバンドの番号の2乗にかかる位相)に直す
+  const toPhase = (ps2: number, fm: number): number => ps2 * (TWO_PI * fm * 0.001) ** 2;
+  const TWO_PI = 2 * Math.PI;
+
+  // cos と sin の表(計算を速くするため)
+  const COS = new Float64Array(M);
+  const SIN = new Float64Array(M);
+  for (let k = 0; k < M; k++) {
+    COS[k] = Math.cos((TWO_PI * k) / M);
+    SIN[k] = Math.sin((TWO_PI * k) / M);
+  }
+  const idx = (n: number, k: number) => (((n * k) % M) + M) % M;
+
+  interface Spectrum {
+    re: Float64Array; // 添字 n + HALF
+    im: Float64Array;
+  }
+
+  // 変調器を通ったあとの光のスペクトル。時刻は、周期を1として -0.5〜0.5
+  const modulate = (pm: boolean, im: boolean, depth: number): Spectrum => {
+    const er = new Float64Array(M);
+    const ei = new Float64Array(M);
+    for (let k = 0; k < M; k++) {
+      const c = COS[(k + M / 2) % M]; // cos(2πt)。t = k/M - 0.5
+      // 位相変調: 位相を、正弦波で揺らす
+      const phase = pm ? depth * c : 0;
+      // 強度変調: t = 0 のまわりだけを通す(マッハツェンダー型の変調器)
+      const amp = im ? Math.cos((Math.PI / 4) * (1 - c)) : 1;
+      er[k] = amp * Math.cos(phase);
+      ei[k] = amp * Math.sin(phase);
+    }
+    const re = new Float64Array(2 * HALF + 1);
+    const imag = new Float64Array(2 * HALF + 1);
+    for (let n = -HALF; n <= HALF; n++) {
+      let sr = 0;
+      let si = 0;
+      for (let k = 0; k < M; k++) {
+        // exp(-i 2π n t)、t = k/M - 0.5
+        const j = idx(-n, k + M / 2);
+        sr += er[k] * COS[j] - ei[k] * SIN[j];
+        si += er[k] * SIN[j] + ei[k] * COS[j];
+      }
+      re[n + HALF] = sr / M;
+      imag[n + HALF] = si / M;
+    }
+    return { re, im: imag };
+  };
+
+  // 分散を通したあとの時間波形。分散は、周波数の2乗に比例する位相を与える
+  const propagate = (spec: Spectrum, amount: number) => {
+    const er = new Float64Array(M);
+    const ei = new Float64Array(M);
+    for (let n = -HALF; n <= HALF; n++) {
+      const a = spec.re[n + HALF];
+      const b = spec.im[n + HALF];
+      if (a * a + b * b < 1e-14) continue;
+      const theta = (-amount * n * n) / 2;
+      const cr = a * Math.cos(theta) - b * Math.sin(theta);
+      const ci = a * Math.sin(theta) + b * Math.cos(theta);
+      for (let k = 0; k < M; k++) {
+        const j = idx(n, k + M / 2);
+        er[k] += cr * COS[j] - ci * SIN[j];
+        ei[k] += cr * SIN[j] + ci * COS[j];
+      }
+    }
+    return { er, ei };
+  };
+
+  const setup = (root: HTMLElement) => {
+    const q = <T extends HTMLElement>(role: string) => root.querySelector<T>(`[data-role="${role}"]`)!;
+    const depthIn = q<HTMLInputElement>("depth");
+    const amountIn = q<HTMLInputElement>("amount");
+    const fmIn = q<HTMLInputElement>("fm");
+    const canvas = q<HTMLCanvasElement>("canvas");
+    const readout = q<HTMLParagraphElement>("readout");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+
+    const on = { pm: false, im: false, disp: false };
+    const labels = { pm: "位相変調器", im: "強度変調器", disp: "分散(光ファイバー)" };
+
+    // 周波数の高低を色にする(-1: 赤、0: 白、+1: 青)
+    const colorOf = (v: number): string => {
+      const x = Math.max(-1, Math.min(1, v));
+      const mix = (a: number, b: number) => Math.round(a + (b - a) * Math.abs(x));
+      return x >= 0 ? `rgb(${mix(235, 90)}, ${mix(235, 160)}, ${mix(235, 255)})` : `rgb(${mix(235, 255)}, ${mix(235, 100)}, ${mix(235, 80)})`;
+    };
+
+    const box = (x: number, y: number, w: number, h: number, text: string, active: boolean, note: string) => {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = active ? "#ffd84d" : "#5a5a66";
+      ctx.fillStyle = active ? "rgba(255, 216, 77, 0.12)" : "#15151c";
+      ctx.setLineDash(active ? [] : [5, 4]);
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+      ctx.setLineDash([]);
+      ctx.fillStyle = active ? "#ffffff" : "#8a8a96";
+      ctx.textAlign = "center";
+      ctx.fillText(text, x + w / 2, y + h / 2 - 2);
+      ctx.fillStyle = active ? "#ffd84d" : "#6a6a76";
+      ctx.fillText(note, x + w / 2, y + h / 2 + 16);
+    };
+
+    const draw = () => {
+      const depth = Number(depthIn.value);
+      const amount = Number(amountIn.value);
+      q<HTMLOutputElement>("depth-out").value = depth.toFixed(1);
+      const fm = Number(fmIn.value);
+      const period = 1000 / fm; // 1周期(ピコ秒)
+      q<HTMLOutputElement>("amount-out").value = amount.toFixed(1);
+      q<HTMLOutputElement>("fm-out").value = String(fm);
+
+      const spec = modulate(on.pm, on.im, depth);
+      const { er, ei } = propagate(spec, on.disp ? toPhase(amount, fm) : 0);
+      const intensity = new Float64Array(M);
+      const freq = new Float64Array(M);
+      let peak = 0;
+      let low = Infinity;
+      for (let k = 0; k < M; k++) {
+        intensity[k] = er[k] * er[k] + ei[k] * ei[k];
+        peak = Math.max(peak, intensity[k]);
+        low = Math.min(low, intensity[k]);
+        // その瞬間の周波数(となりの点との位相の差から求める。単位は変調周波数)
+        const k2 = (k + 1) % M;
+        const cr = er[k2] * er[k] + ei[k2] * ei[k];
+        const ci = ei[k2] * er[k] - er[k2] * ei[k];
+        freq[k] = (Math.atan2(ci, cr) * M) / TWO_PI;
+      }
+
+      ctx.fillStyle = "#0b0b0f";
+      ctx.fillRect(0, 0, W, canvas.height);
+      ctx.font = "13px sans-serif";
+      ctx.textBaseline = "alphabetic";
+
+      // --- 上: 部品の並び ---
+      const by = 22;
+      const bh = 52;
+      ctx.strokeStyle = "#ff6e5a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(140, by + bh / 2);
+      ctx.lineTo(W - 70, by + bh / 2);
+      ctx.stroke();
+      ctx.fillStyle = "#ff6e5a";
+      ctx.beginPath();
+      ctx.moveTo(W - 60, by + bh / 2);
+      ctx.lineTo(W - 72, by + bh / 2 - 6);
+      ctx.lineTo(W - 72, by + bh / 2 + 6);
+      ctx.closePath();
+      ctx.fill();
+      box(30, by, 120, bh, "CWレーザー", true, "連続光");
+      box(200, by, 170, bh, labels.pm, on.pm, on.pm ? "サイドバンドとチャープ" : "切");
+      box(410, by, 170, bh, labels.im, on.im, on.im ? "一部だけを切り出す" : "切");
+      box(620, by, 170, bh, labels.disp, on.disp, on.disp ? "圧縮する" : "切");
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "center";
+      ctx.fillText("出力", W - 38, by + bh / 2 + 4);
+      // 変調信号
+      ctx.strokeStyle = "#6fb7ff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(285, by + bh);
+      ctx.lineTo(285, by + bh + 22);
+      ctx.lineTo(495, by + bh + 22);
+      ctx.lineTo(495, by + bh);
+      ctx.stroke();
+      ctx.fillStyle = "#6fb7ff";
+      ctx.fillText(`変調信号(周波数 fm = ${fm} GHz の電気の信号)`, 390, by + bh + 40);
+
+      // --- 左下: スペクトル ---
+      const sl = 50;
+      const sr = 420;
+      const st = 165;
+      const sb = 385;
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sl + 0.5, st + 0.5, sr - sl, sb - st);
+      let maxLine = 0;
+      const power = new Float64Array(2 * HALF + 1);
+      for (let n = -HALF; n <= HALF; n++) {
+        const p = spec.re[n + HALF] ** 2 + spec.im[n + HALF] ** 2;
+        power[n + HALF] = p;
+        maxLine = Math.max(maxLine, p);
+      }
+      let lines = 0;
+      ctx.strokeStyle = "#ffd84d";
+      ctx.lineWidth = fm < 16 ? 2 : 3;
+      for (let n = -HALF; n <= HALF; n++) {
+        const p = power[n + HALF] / maxLine;
+        if (p >= 0.1) lines++;
+        if (p < 0.004 || Math.abs(n * fm) > SPAN_GHZ - 10) continue;
+        const x = (sl + sr) / 2 + ((n * fm) / SPAN_GHZ) * ((sr - sl) / 2);
+        ctx.beginPath();
+        ctx.moveTo(x, sb - 1);
+        ctx.lineTo(x, sb - 1 - p * (sb - st - 22));
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText(`スペクトル(目立つ線: ${lines}本)`, sl, st - 10);
+      ctx.textAlign = "center";
+      ctx.fillText("f₀", (sl + sr) / 2, sb + 18);
+      ctx.textAlign = "right";
+      ctx.fillText("光の周波数 →", sr, sb + 18);
+      ctx.textAlign = "left";
+      ctx.fillText(`線の間隔 = ${fm} GHz`, sl, sb + 18);
+
+      // --- 右下: 時間波形 ---
+      const tl = 490;
+      const tr = W - 25;
+      const tt = 165;
+      const tb = 385;
+      const top = Math.max(1.25, peak * 1.12);
+      ctx.strokeStyle = "#5a5a66";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(tl + 0.5, tt + 0.5, tr - tl, tb - tt);
+      const yOf = (v: number) => tb - (v / top) * (tb - tt);
+      // CW光の強さ(基準)
+      ctx.strokeStyle = "#5a5a66";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(tl, yOf(1));
+      ctx.lineTo(tr, yOf(1));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const span = Math.max(1, on.pm ? depth : 1);
+      ctx.lineWidth = 2.5;
+      // 表示する時間の幅は一定なので、変調周波数が高いほど、たくさんの周期が入る
+      const total = Math.round((SPAN_PS / period) * M);
+      for (let i = 0; i < total; i++) {
+        const k = (i + M / 4) % M;
+        const k2 = (i + 1 + M / 4) % M;
+        const x1 = tl + (i / total) * (tr - tl);
+        const x2 = tl + ((i + 1) / total) * (tr - tl);
+        ctx.strokeStyle = intensity[k] < 0.004 * peak ? "#44444e" : colorOf(freq[k] / span);
+        ctx.beginPath();
+        ctx.moveTo(x1, yOf(intensity[k]));
+        ctx.lineTo(x2, yOf(intensity[k2]));
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#c8c8d0";
+      ctx.textAlign = "left";
+      ctx.fillText("光の強さの時間変化(色: その瞬間の周波数。青=高い、赤=低い)", tl - 30, tt - 10);
+      ctx.textAlign = "right";
+      ctx.fillText("CW光", tl - 6, yOf(1) + 4);
+      ctx.fillText("0", tl - 6, tb);
+      ctx.fillText("時間 →", tr, tb + 18);
+      ctx.textAlign = "left";
+      ctx.fillText(`パルスの間隔 = 1 ÷ fm = ${period.toFixed(0)} ps`, tl, tb + 18);
+
+      // --- 説明 ---
+      // パルスの幅(強さがピークの半分以上である時間の割合)
+      let above = 0;
+      for (let k = 0; k < M; k++) if (intensity[k] >= peak / 2) above++;
+      const width = above / M;
+      const pulsed = low < 0.5 * peak;
+      const meters = amount / FIBER_PS2_PER_M;
+      const fiber = `この分散の量は、通信用の光ファイバー約${meters >= 1000 ? (meters / 1000).toFixed(1) + " km" : Math.round(meters / 10) * 10 + " m"}ぶんにあたります。`;
+      const measure = `パルスの幅は約${(width * period).toFixed(1)}ピコ秒(間隔の約${(width * 100).toFixed(width < 0.1 ? 1 : 0)}%)、ピークの強さはCW光の約${peak.toFixed(1)}倍です。`;
+      let text: string;
+      if (!on.pm && !on.im) {
+        text = "CWレーザーの光は、周波数が1本だけで、強さも一定です。まず、位相変調器を入れてみてください。";
+      } else if (on.pm && !on.im && !(on.disp && amount > 0)) {
+        text = `位相変調で、サイドバンドができました(目立つ線が${lines}本)。しかし、位相を変えただけなので、光の強さは一定のままです。色を見ると、周波数が下がっていく区間と、上がっていく区間が、交互に並んでいます(チャープ)。次に、強度変調器を入れてみてください。`;
+      } else if (!on.pm && on.im) {
+        text = `強度変調だけでは、幅の広いパルスになるだけで、線は${lines}本しかできません。短いパルスには、たくさんの周波数成分が必要です。位相変調器も入れてみてください。`;
+      } else if (on.pm && on.im && !(on.disp && amount > 0)) {
+        text = `周波数が下がっていく区間(青から赤へ変わる部分)だけを切り出しました。パルスにはなりましたが、幅はまだ約${(width * period).toFixed(0)}ピコ秒(間隔の約${Math.round(width * 100)}%)あります。高い周波数の成分が前に、低い周波数の成分が後ろにずれているためです。分散を入れて、このずれを取り除いてください。`;
+      } else if (!pulsed) {
+        text = "この組み合わせでは、はっきりしたパルスになっていません。";
+      } else if (on.pm && on.im && width < 0.6 / depth) {
+        text = `すべての周波数成分が、同じ時刻に重なりました。${measure}${fiber}位相変調を深くするか、変調周波数を高くすると、スペクトルが広がり、パルスはさらに短くなります。`;
+      } else if (on.pm && on.im) {
+        text = `${measure}分散の量が合っていないので、まだ短くできます。少なすぎると圧縮が足りず、多すぎると、また広がります。`;
+      } else {
+        text = `${measure}強度変調器がないと、周波数が上がっていく区間の光が圧縮されずに残り、パルスのすそに広がります。`;
+      }
+      readout.textContent = text;
+    };
+
+    // パルスのピークが最も高くなる分散の量を探す
+    const findBest = () => {
+      const spec = modulate(on.pm, on.im, Number(depthIn.value));
+      let best = 0;
+      let bestPeak = 0;
+      const fm = Number(fmIn.value);
+      for (let a = 0; a <= 100.001; a += 0.2) {
+        const { er, ei } = propagate(spec, toPhase(a, fm));
+        let peak = 0;
+        for (let k = 0; k < M; k++) peak = Math.max(peak, er[k] * er[k] + ei[k] * ei[k]);
+        if (peak > bestPeak + 1e-9) {
+          bestPeak = peak;
+          best = a;
+        }
+      }
+      return best;
+    };
+
+    (["pm", "im", "disp"] as const).forEach((key) => {
+      const btn = q<HTMLButtonElement>(key);
+      btn.addEventListener("click", () => {
+        on[key] = !on[key];
+        btn.textContent = `${labels[key]}: ${on[key] ? "入" : "切"}`;
+        btn.setAttribute("aria-pressed", String(on[key]));
+        draw();
+      });
+    });
+    q<HTMLButtonElement>("best").addEventListener("click", () => {
+      const dispBtn = q<HTMLButtonElement>("disp");
+      if (!on.disp) dispBtn.click();
+      amountIn.value = findBest().toFixed(1);
+      draw();
+    });
+    depthIn.addEventListener("input", draw);
+    amountIn.addEventListener("input", draw);
+    fmIn.addEventListener("input", draw);
+    draw();
+  };
+
+  document.querySelectorAll<HTMLElement>('[data-sim-root="eocomb"]').forEach(setup);
+</script>

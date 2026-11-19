@@ -1,0 +1,106 @@
+---
+// 「研究室の1年」の表示(「研究室で学ぶ」のページ用)。
+// 内容は src/data/join.yaml の year に書く。学年のボタンを押すと、その学年に関係する予定だけが強調される。
+
+export interface YearItem {
+  text: string;
+  // 対象の学年: "B4" "M0" "M1" "M2" "M0以上" "M1以上"。書かなければ全員
+  who?: string;
+  // 種類: research=研究・発表 / conference=学会 / career=就職活動・インターン / exam=大学院入試 / event=行事
+  kind?: string;
+}
+export interface YearMonth {
+  month: number;
+  items?: YearItem[];
+}
+interface Props {
+  months: YearMonth[];
+}
+
+const { months } = Astro.props;
+
+const grades = ["B4", "M0", "M1", "M2"];
+// その予定が、どの学年に関係するか。M0(修士進学予定の学部4年生)は、B4の予定にも参加する
+const gradesOf = (who?: string): string[] => {
+  switch (who) {
+    case undefined:
+    case "":
+      return grades;
+    case "B4":
+      return ["B4", "M0"];
+    case "M0以上":
+      return ["M0", "M1", "M2"];
+    case "M1以上":
+      return ["M1", "M2"];
+    default:
+      return [who];
+  }
+};
+
+const kinds = [
+  { key: "research", label: "研究・発表" },
+  { key: "conference", label: "学会" },
+  { key: "career", label: "就職活動・インターン" },
+  { key: "exam", label: "大学院入試" },
+  { key: "event", label: "行事" },
+];
+const usedKinds = kinds.filter((k) => months.some((m) => m.items?.some((i) => (i.kind ?? "event") === k.key)));
+---
+
+<div class="year" data-year>
+  <div class="year__filter" role="group" aria-label="学年で絞り込む">
+    <span>自分の学年で見る:</span>
+    <button type="button" data-grade="" aria-pressed="true">すべて</button>
+    {grades.map((g) => (
+      <button type="button" data-grade={g} aria-pressed="false">
+        {g}
+      </button>
+    ))}
+  </div>
+
+  <ol class="year__list">
+    {months.map((m) => (
+      <li class="year__row">
+        <span class="year__month">{m.month}月</span>
+        <ul class="year__items">
+          {(m.items ?? []).map((item) => (
+            <li
+              class={`year__item year__item--${item.kind ?? "event"}`}
+              data-grades={gradesOf(item.who).join(" ")}
+            >
+              {item.text}
+              {item.who && <small>{item.who}</small>}
+            </li>
+          ))}
+          {(m.items ?? []).length === 0 && <li class="year__none">—</li>}
+        </ul>
+      </li>
+    ))}
+  </ol>
+
+  <p class="year__legend">
+    {usedKinds.map((k) => (
+      <span class={`year__key year__item--${k.key}`}>{k.label}</span>
+    ))}
+  </p>
+  <p class="stat-note">
+    B4は学部4年生、M1・M2は修士1・2年生です。M0は、修士課程に進学する予定の学部4年生を指します。
+  </p>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>("[data-year]").forEach((root) => {
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>("[data-grade]")];
+    const items = [...root.querySelectorAll<HTMLElement>("[data-grades]")];
+    buttons.forEach((button) =>
+      button.addEventListener("click", () => {
+        const grade = button.dataset.grade ?? "";
+        buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+        items.forEach((item) => {
+          const match = grade === "" || (item.dataset.grades ?? "").split(" ").includes(grade);
+          item.classList.toggle("is-dim", !match);
+        });
+      }),
+    );
+  });
+</script>
