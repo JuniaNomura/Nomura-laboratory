@@ -4,7 +4,7 @@ summary: "画素ごとにスペクトルまで取得して、物体の材質や�
 axis: "measure"
 order: 5
 simulator: "hyper"
-draft: true
+draft: false
 ---
 
 #### どんな技術？

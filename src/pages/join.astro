@@ -243,9 +243,10 @@ const toc = [
               </>
             )}
           </p>
-          {contact.note && <p>{contact.note}</p>}
           {hasForm ? (
             <>
+              {/* note はフォームへの案内文なので、フォームがあるときだけ出す */}
+              {contact.note && <p>{contact.note}</p>}
               <p>
                 <a class="button" href={contact.formUrl} target="_blank" rel="noopener noreferrer">
                   {contact.formLabel || "見学・相談フォームを開く"}
@@ -256,7 +257,7 @@ const toc = [
           ) : (
             import.meta.env.DEV && (
               <p class="notice">
-                フォームのURLが未入力のため、ボタンは表示されません(src/data/join.yaml の contact.formUrl)。
+                フォームのURLが未入力のため、フォームへの案内文(note)とボタンは表示されません(src/data/join.yaml の contact.formUrl)。
               </p>
             )
           )}
