@@ -1,4 +1,4 @@
-// 教育・アウトリーチのページで使う表示名とリンクの作り方。
+// 「教育」のページ(学内の講義)と、「学外の方へ」のページ(学外講義)で使う表示名とリンクの作り方。
 // 種類を増やすときは、src/content.config.ts と public/admin/config.yml も揃える。
 import { withBase } from "./url";
 import { isHttpUrl } from "./contact";

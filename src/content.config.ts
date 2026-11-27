@@ -169,7 +169,8 @@ const guides = defineCollection({
   }),
 });
 
-// 教育・アウトリーチ(担当した講義や学外講義と、その資料)。種類の表示は src/utils/teaching.ts と揃える
+// 講義と、その資料。course は「教育」のページに、outreach は「学外の方へ」のページに出る。
+// 種類の表示は src/utils/teaching.ts と揃える
 const teaching = defineCollection({
   loader: glob({ pattern: "**/[^_]*.md", base: "./src/content/teaching" }),
   schema: z.object({
@@ -217,6 +218,12 @@ const publications = defineCollection({
       url: z.string().optional(),
       // researchmapの業績種別 (published_papers, presentations, books_etc など)
       achievementType: z.string().optional(),
+      // 業績のページで種別ごとに分けるための情報(researchmapの値をそのまま保持)
+      refereed: z.boolean().optional(),
+      paperType: z.string().optional(),
+      presentationType: z.string().optional(),
+      invited: z.boolean().optional(),
+      languages: z.array(z.string()).optional(),
       // どのメンバーのresearchmapから取得したか (permalink)
       ownerPermalink: z.string().optional(),
       // researchmap側の業績ID。重複除去や再取得時の突き合わせに使う

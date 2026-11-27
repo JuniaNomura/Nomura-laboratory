@@ -1,3 +1,5 @@
+import { loadYaml } from "../utils/data";
+
 // サイト全体で使う設定値をまとめたファイル。
 // ラボ名やロゴ、連絡先などはここを直せば全ページに反映される。
 export const siteConfig = {
@@ -21,15 +23,18 @@ export const siteConfig = {
   cloudflareAnalyticsToken: "5a196ab98148409bbfd2e53eb9dfe5da",
 } as const;
 
+// 「学外の方へ」のページを公開しているか(src/data/visitors.yaml の published)
+export const visitorsPublished = loadYaml<{ published?: boolean }>("src/data/visitors.yaml", {}).published === true;
+
 export const navItems = [
   { href: "/", label: "トップ" },
   { href: "/research/", label: "研究内容" },
   { href: "/members/", label: "メンバー" },
   { href: "/join/", label: "研究室で学ぶ" },
   { href: "/publications/", label: "業績" },
-  // 公開できる資料がそろうまでは、開発サーバー(npm run dev)でだけメニューに出す。
-  // 公開するときは、この行を { href: "/teaching/", label: "教育・アウトリーチ" }, に書き換える
-  ...(import.meta.env.DEV ? [{ href: "/teaching/", label: "教育・アウトリーチ" }] : []),
+  { href: "/teaching/", label: "教育" },
+  // 「学外の方へ」は、src/data/visitors.yaml の published が true になるまで、開発サーバーでだけ出す
+  ...(import.meta.env.DEV || visitorsPublished ? [{ href: "/visitors/", label: "学外の方へ" }] : []),
   { href: "/news/", label: "ニュース" },
   { href: "/access/", label: "アクセス" },
 ] as const;

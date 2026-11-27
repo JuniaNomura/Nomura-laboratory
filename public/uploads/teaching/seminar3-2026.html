@@ -1,0 +1,518 @@
+<!doctype html>
+<!-- 野邑研究室のサイトの「教育」のページから案内している、3年生ゼミナールの授業資料。
+     授業の進み具合に合わせて、このファイルを直接書き換えて更新する(src/content/teaching/seminar3-2026.md から案内) -->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>配属前ゼミナール 2026 | 石澤・野邑研究室</title>
+<meta name="description" content="2026年度 第4クォーター 3年生ゼミナール(野邑担当)の授業資料。日程、課題、提出物、論文コンクールへの応募の注意をまとめています。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 1カラムの読む資料。上に「次の締切」、その下に3日間のタイムライン、最後に提出物と応募の注意 */
+:root{
+  --bg:#F3F6F7; --surface:#FFFFFF; --fg:#13232A; --muted:#566870; --line:#D3DCDF;
+  --accent:#0E6A70; --accent-soft:#E0EFEF; --warn:#A85A12; --warn-soft:#FBEEDF;
+  --indiv:#5B4BA3; --indiv-soft:#ECE9F7;
+  --f-display:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-body:"BIZ UDPGothic","Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D1518; --surface:#142026; --fg:#E2EBED; --muted:#93A5AB; --line:#26373D;
+  --accent:#55C2C7; --accent-soft:#16343A; --warn:#EBA35C; --warn-soft:#3A2A19;
+  --indiv:#A99BEB; --indiv-soft:#2A2645; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1518; --surface:#142026; --fg:#E2EBED; --muted:#93A5AB; --line:#26373D;
+  --accent:#55C2C7; --accent-soft:#16343A; --warn:#EBA35C; --warn-soft:#3A2A19;
+  --indiv:#A99BEB; --indiv-soft:#2A2645; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.85;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:860px;margin:0 auto;padding-block:40px 80px;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.35;margin:0}
+h2{font-size:1.5rem;font-weight:900;display:flex;align-items:baseline;gap:12px}
+h2 .en{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;font-weight:600}
+h3{font-size:1.1rem;font-weight:700}
+p{margin:0}
+a{color:var(--accent)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+section{display:flex;flex-direction:column;gap:20px}
+
+/* ヘッダー */
+header{display:flex;flex-direction:column;gap:18px}
+.eyebrow{font-family:var(--f-mono);font-size:.78rem;letter-spacing:.1em;color:var(--muted)}
+h1{font-size:clamp(1.7rem,4.6vw,2.5rem);font-weight:900}
+h1 small{display:block;font-size:.5em;font-weight:700;color:var(--muted);margin-top:6px}
+.comb{width:100%;height:auto;display:block}
+.comb .tooth{stroke:var(--accent)}
+.comb .axis{stroke:var(--muted)}
+.comb text{fill:var(--muted);font-family:var(--f-mono);font-size:11px}
+.goal{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.goal .theme{font-family:var(--f-display);font-weight:900;font-size:1.35rem}
+.kws{display:flex;flex-wrap:wrap;gap:8px}
+.kw{font-family:var(--f-display);font-weight:700;font-size:.95rem;padding:4px 12px;border-radius:999px;background:var(--accent-soft);color:var(--accent)}
+.rule{font-size:.95rem;color:var(--muted)}
+.rule b{color:var(--fg)}
+
+/* 次の締切 */
+.next{border:2px solid var(--warn);background:var(--warn-soft);border-radius:10px;padding:18px 22px;display:grid;grid-template-columns:auto 1fr;gap:6px 20px;align-items:center}
+.next .lbl{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.1em;color:var(--warn);font-weight:600;grid-column:1/-1}
+.next .count{font-family:var(--f-display);font-weight:900;font-size:2.2rem;color:var(--warn);line-height:1;font-variant-numeric:tabular-nums}
+.next .count span{font-size:.9rem;font-weight:700}
+.next .what{min-width:0}
+.next .what b{font-family:var(--f-display);font-size:1.05rem}
+.next .what div{color:var(--muted);font-size:.92rem}
+
+/* 授業の進め方 */
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.fact{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.fact .k{font-size:.8rem;color:var(--muted)}
+.fact .v{font-family:var(--f-display);font-weight:700;font-size:1.1rem}
+.bring{font-size:.95rem}
+
+/* 日ごとのタイムライン */
+.daynav{display:flex;gap:8px;flex-wrap:wrap}
+.daynav a{font-family:var(--f-display);font-weight:700;text-decoration:none;padding:6px 14px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)}
+.daynav a:hover{border-color:var(--accent);color:var(--accent)}
+.day{display:flex;flex-direction:column;gap:14px;scroll-margin-top:16px}
+.day-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:2px solid var(--fg);padding-bottom:8px}
+.day-head .n{font-family:var(--f-display);font-weight:900;font-size:1.6rem}
+.day-head .date{font-family:var(--f-mono);color:var(--muted);font-size:.9rem}
+.day-head .goal-line{font-size:.95rem;color:var(--muted);flex-basis:100%}
+.task{border-radius:8px;padding:14px 18px;display:flex;flex-direction:column;gap:8px}
+.task.pre{background:var(--surface);border:1px dashed var(--muted)}
+.task.post{background:var(--surface);border:1px solid var(--warn)}
+.task .tag{font-family:var(--f-mono);font-size:.74rem;letter-spacing:.1em;font-weight:600;color:var(--muted)}
+.task.post .tag{color:var(--warn)}
+.task ul{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px}
+.slots{list-style:none;margin:0;padding:0;border-left:3px solid var(--line);display:flex;flex-direction:column}
+.slot{display:grid;grid-template-columns:120px 1fr;gap:16px;padding:14px 0 14px 18px;position:relative}
+.slot+.slot{border-top:1px solid var(--line)}
+.slot::before{content:"";position:absolute;left:-8px;top:21px;width:13px;height:13px;border-radius:50%;background:var(--bg);border:3px solid var(--accent)}
+.slot.indiv::before{border-color:var(--indiv)}
+.when{font-family:var(--f-display);font-weight:700;line-height:1.4}
+.when .koma{display:block;font-family:var(--f-mono);font-size:.74rem;color:var(--muted);font-weight:400}
+.body{min-width:0;display:flex;flex-direction:column;gap:8px}
+.badge{align-self:flex-start;font-size:.75rem;font-weight:700;padding:1px 9px;border-radius:4px;background:var(--accent-soft);color:var(--accent)}
+.badge.indiv{background:var(--indiv-soft);color:var(--indiv)}
+.hw{font-size:.92rem;background:var(--warn-soft);border-radius:6px;padding:8px 12px}
+.hw b{color:var(--warn)}
+.hint{font-size:.92rem;color:var(--muted)}
+
+/* ファイル名 */
+.fname-tool{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+.inputs{display:flex;gap:12px;flex-wrap:wrap}
+.inputs label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted);flex:1 1 180px}
+.inputs input{font:inherit;font-size:1rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.fn{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fn code{font-family:var(--f-mono);font-size:.9rem;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 10px;overflow-wrap:anywhere;min-width:0;flex:1 1 260px;user-select:all}
+.fn .what{font-size:.85rem;color:var(--muted);flex-basis:100%}
+button{font:inherit;font-size:.85rem;font-weight:700;cursor:pointer;border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:6px;padding:6px 12px}
+button:hover{background:var(--accent-soft)}
+
+/* 提出物チェック */
+.checklist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.checklist li+li{border-top:1px solid var(--line)}
+.checklist label{display:grid;grid-template-columns:22px 1fr auto;gap:12px;align-items:start;padding:12px 18px;cursor:pointer}
+.checklist input{width:18px;height:18px;margin-top:5px;accent-color:var(--accent)}
+.checklist .who{font-size:.78rem;font-weight:700;color:var(--muted);white-space:nowrap;padding-top:4px}
+.checklist input:checked ~ span{color:var(--muted);text-decoration:line-through}
+.final{font-family:var(--f-display);font-weight:700}
+.final .mono{color:var(--warn)}
+.note{font-size:.9rem;color:var(--muted)}
+
+/* 応募の注意 */
+.rules{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:8px}
+.rules b{color:var(--warn)}
+/* 事後課題の構成指示 */
+.sub{display:flex;flex-direction:column;gap:8px;margin-top:6px;font-size:.95rem}
+.sub ol{margin:0;padding-left:1.4em;display:flex;flex-direction:column;gap:4px}
+.rev{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.rev-cap{font-size:.78rem;color:var(--muted)}
+.rev-row{display:grid;grid-template-columns:6em 1fr;gap:10px;font-size:.92rem}
+.rev-row>span:last-child{min-width:0}
+.rev-k{font-family:var(--f-display);font-weight:700;color:var(--warn)}
+.rev-row.resp .rev-k{color:var(--accent)}
+/* 提出・質問のルール */
+.qa{margin:0;display:grid;grid-template-columns:11em 1fr;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.qa dt,.qa dd{margin:0;padding:12px 18px}
+.qa dt{font-family:var(--f-display);font-weight:700;background:var(--accent-soft);color:var(--accent)}
+.qa dt:not(:first-of-type),.qa dd:not(:first-of-type){border-top:1px solid var(--line)}
+.qa dd{min-width:0}
+@media (max-width:640px){.qa{grid-template-columns:1fr}.qa dd{border-top:none!important}}
+.links{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+footer{font-size:.85rem;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+
+@media (max-width:640px){
+  .facts{grid-template-columns:1fr}
+  .slot{grid-template-columns:1fr;gap:6px}
+  .next{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">2026年度 第4クォーター ／ 石澤・野邑研究室</div>
+  <h1>配属前ゼミナール<small>3年生ゼミナール（野邑担当）</small></h1>
+
+  <svg class="comb" viewBox="0 0 860 92" role="img" aria-label="光周波数コムのスペクトルを模した図">
+    <g id="teeth"></g>
+    <line class="axis" x1="10" y1="72" x2="850" y2="72" stroke-width="1"/>
+    <text x="850" y="88" text-anchor="end">周波数 f</text>
+    <text x="10" y="88">f_n = n · f_rep + f_ceo</text>
+  </svg>
+
+  <div class="goal">
+    <div class="eyebrow">このゼミの目標</div>
+    <p>「第27回 理工系学生科学技術論文コンクール」への応募を目標に取り組みます。実際に応募するかどうかは自由です。</p>
+    <div class="theme">論文テーマ「科学技術と日本の将来」</div>
+    <div class="kws">
+      <span class="kw">光周波数コム</span><span class="kw">次世代無線通信</span><span class="kw">非破壊計測</span><span class="kw">テラヘルツ</span>
+    </div>
+    <p class="rule"><b>ルール：</b>上の4つのキーワードのうち、<b>2つ以上</b>を使って書くこと。</p>
+  </div>
+</header>
+
+<div class="next" id="next" aria-live="polite">
+  <div class="lbl">次の締切</div>
+  <div class="count" id="next-count">—</div>
+  <div class="what"><b id="next-title">1日目 事前課題（2つ）</b><div id="next-when">2026年11月27日（金）午前10時 ／ Classroomのフォームから提出</div></div>
+</div>
+
+<section id="howto">
+  <h2>授業の進め方 <span class="en">Format</span></h2>
+  <div class="facts">
+    <div class="fact"><div class="k">1コマ</div><div class="v">45分＋休憩5分</div></div>
+    <div class="fact"><div class="k">全体</div><div class="v">3日間・12コマ</div></div>
+    <div class="fact"><div class="k">1日の流れ</div><div class="v">3限・4限 × 前半／後半</div></div>
+  </div>
+  <p class="bring"><b>提出のルール：</b>事前課題（前回の事後課題・宿題を含む）は、<b>授業日の午前10時まで</b>に、<b>Classroom上に作成されたフォーム</b>から提出します。授業が始まる時刻ではなく、<b>その日の朝10時</b>が締切です。</p>
+  <p class="bring"><b>持ち物：</b>PC、筆記用具、ノート。議事録やスライドは<b>WordやPowerPointで作り、PDFに変換して提出</b>します。提出物はゼミの学生と教員（石澤先生・野邑）で共有するので、プライバシーやモラルに注意してください。</p>
+  <nav class="daynav" aria-label="日ごとの内容へ移動">
+    <a href="#rules">提出・質問のルール</a><a href="#day1">1日目</a><a href="#day2">2日目</a><a href="#day3">3日目</a><a href="#submit">提出物一覧</a><a href="#contest">応募の注意</a>
+  </nav>
+</section>
+
+<section id="rules">
+  <h2>提出・質問のルール <span class="en">Rules</span></h2>
+  <dl class="qa">
+    <dt>提出方法</dt>
+    <dd>すべての提出物は、<b>Classroom上に作成されるフォーム</b>から提出します。各回の締切は授業日の午前10時です。</dd>
+    <dt>ファイル名</dt>
+    <dd>1日目の事前課題以外のファイル名は、<b>各回のフォームで指示します</b>。提出のたびに、必ずフォームの指示を確認してください。</dd>
+    <dt>グループの提出物</dt>
+    <dd>議事録やグループのpptは、<b>代表者1名</b>が提出すれば大丈夫です。フォームには<b>グループ全員の名前</b>を記入してください。</dd>
+    <dt>司会進行と議事録</dt>
+    <dd>司会進行と議事録の担当は、<b>コマごとに違う人</b>が務めてください。同じ人が続けて担当しないようにしましょう。</dd>
+    <dt>作文の書式</dt>
+    <dd>論文コンクールの書式に合わせます（3200字以内、参考文献は字数に含めない）。Wordで書いたファイルを<b>PDFに変換</b>して提出します。</dd>
+    <dt>最終提出</dt>
+    <dd>2027年1月25日（月）正午まで。専用のフォームを用意します。授業中にグループで提出した議事録やpptは<b>再提出不要</b>です。</dd>
+    <dt>遅刻・欠席・締切遅れ</dt>
+    <dd>通常の授業と同様に扱い、採点します。</dd>
+    <dt>授業時間</dt>
+    <dd>通常の時間割どおり、3限・4限に行います。</dd>
+    <dt>質問</dt>
+    <dd>Classroomから野邑にメールで問い合わせてください。</dd>
+  </dl>
+</section>
+
+<!-- 1日目 -->
+<section class="day" id="day1">
+  <div class="day-head"><span class="n">1日目</span><span class="date" data-date="day1">2026.11.27（金）</span><span class="goal-line">課題を出し合い、4つの技術を知り、解決策を紙芝居で伝える</span></div>
+
+  <div class="task pre">
+    <div class="tag">事前課題（個人） ／ 締切 <span data-due="day1">11/27（金）10:00</span> ／ Classroomのフォーム</div>
+    <ul>
+      <li><b>課題</b>：日本の課題や将来への不安、身の回りで「もっとこうなったらいいな」と思うことを、<b>自分なりの言葉</b>で書き、<b>Word 1枚程度</b>にまとめる。右上に学生番号と氏名を記入し、PDFに変換して提出。
+        <div class="hint">一般的な話ではなく、皆さんの<b>リアルな声</b>を可能な範囲で聴きたいと思います。テーマがいくつあっても、まとまりが悪くても構いません。<b>生成AIなどは、可能な限り使わないでください。</b>この資料は主にグループワークで使うもので、直接成績を付ける材料ではありません。</div>
+      </li>
+      <li><b>調査</b>：4つのキーワードについて調べ、<b>各テーマ1枚、計4枚</b>のpptにまとめ、<b>1つのPDFファイル</b>に変換して提出。石澤・野邑研究室の研究内容と直接結びついている必要はありません。
+        <div class="hint">Hint：「それは何か」「どういう仕組みで動くか」「これまでの技術と比べた優位性」「大学の研究室で研究する価値（研究要素）」を、図・表・式を使ってまとめるとよいでしょう。</div>
+      </li>
+    </ul>
+    <div class="hint">課題は学生とゼミの教員（石澤先生・野邑）の間で共有するので、プライバシーやモラルに注意してください。ファイル名は下の「ファイル名を作る」を使ってください。</div>
+  </div>
+
+  <ol class="slots">
+    <li class="slot"><div class="when">3限 前半<span class="koma">コマ 1</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>日本の課題や将来への不安、「もっとこうなったらいいな」と思うことを自由に共有しあう。</p>
+      <p class="hint">Hint：<a href="https://www.rikokei.jp/" target="_blank" rel="noopener">論文コンクール公式サイト</a>の「論文作成のコツ」を参考にするとよいでしょう。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。</p>
+    </div></li>
+    <li class="slot"><div class="when">3限 後半<span class="koma">コマ 2</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>事前課題でまとめた4つのキーワードのpptを、グループごとに発表。教員が講評・コメントします。</p>
+    </div></li>
+    <li class="slot"><div class="when">4限 前半<span class="koma">コマ 3</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>4つの技術を使って、みんなが挙げた課題や将来への不安を解決できないか議論する。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。</p>
+    </div></li>
+    <li class="slot"><div class="when">4限 後半<span class="koma">コマ 4</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>議論から<b>課題と解決方法を1つ</b>選び、ホワイトボードに描いた<b>4枚の図で起承転結</b>を表現。紙芝居形式で発表します。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。</p>
+    </div></li>
+  </ol>
+
+  <div class="task post">
+    <div class="tag">事後課題 ／ 締切 <span data-due="day2">12/4（金）10:00</span> ／ Classroomのフォーム</div>
+    <ul>
+      <li>1日目の議事録 ×3（グループ）</li>
+      <li><b>新しいグループ</b>で、4つのキーワードについて発展的な内容を調べ、<b>各テーマ2枚、計8枚</b>のpptにまとめ、<b>1つのPDFファイル</b>に変換して提出する。
+        <div class="sub">
+          <p>論文の査読者（レビュアー）への回答を意識して、1日目の発表で受けた<b>教員の講評・コメントに答える形</b>で構成してください。各メンバーが前のグループで受けたコメントを持ち寄りましょう。</p>
+          <ol>
+            <li><b>講評・コメント</b>：1日目の発表で教員から受けた講評やコメントを書く。</li>
+            <li><b>発展事項</b>：それを踏まえて調べたこと・考えたことを書く。どのコメントへの対応なのかが分かるように、番号などで対応付ける。</li>
+          </ol>
+          <div class="rev" aria-label="構成の例">
+            <div class="rev-cap">構成の例（内容は一例です）</div>
+            <div class="rev-row"><span class="rev-k">コメント 1</span><span>テラヘルツ波が水に吸収されやすい点に触れていない。</span></div>
+            <div class="rev-row resp"><span class="rev-k">対応 1</span><span>水による吸収の大きさを調べた。さらに、この性質を逆に利用して、食品や材料の水分量を非破壊で計測する研究があることをまとめた。</span></div>
+          </div>
+          <p class="hint">調べる観点は、1日目の事前課題のHint（それは何か／仕組み／これまでの技術に比べた優位性／大学で研究する価値）も参考にしてください。</p>
+        </div>
+      </li>
+    </ul>
+    <div class="hint">これが2日目の事前課題になります。</div>
+  </div>
+</section>
+
+<!-- 2日目 -->
+<section class="day" id="day2">
+  <div class="day-head"><span class="n">2日目</span><span class="date" data-date="day2">2026.12.04（金）</span><span class="goal-line">新しいグループで発展調査を共有し、もう一度解決策を組み立てる</span></div>
+
+  <div class="task pre">
+    <div class="tag">事前課題 ／ 締切 <span data-due="day2">12/4（金）10:00</span> ／ Classroomのフォーム</div>
+    <ul><li>1日目の事後課題（議事録×3、発展調査ppt）を、授業日の午前10時までにフォームから提出する。</li></ul>
+  </div>
+
+  <ol class="slots">
+    <li class="slot"><div class="when">3限 前半<span class="koma">コマ 5</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>発展調査のpptをグループごとに発表。教員が講評・コメントします。</p>
+      <p class="hw"><b>宿題（個人）</b> この発表で受けた講評・コメントを踏まえて、最終提出物の「4つのキーワードについてのレポート」（<b>各テーマA4で3枚、計12枚</b>をpptで作り、<b>1つのPDFファイル</b>に変換）に取り組む。締切は<b>2027年1月25日（月）正午</b>。構成などの詳細は<a href="#day3">3日目の事後課題</a>を参照。</p>
+    </div></li>
+    <li class="slot"><div class="when">3限 後半<span class="koma">コマ 6</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>4つの技術を使って、課題や将来への不安を解決できないか議論する。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day3">12/11（金）10:00</span>）。</p>
+    </div></li>
+    <li class="slot"><div class="when">4限 前半<span class="koma">コマ 7</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>議論から課題と解決方法を1つ選び、ホワイトボードに描いた4枚の図で起承転結を表現する。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day3">12/11（金）10:00</span>）。</p>
+    </div></li>
+    <li class="slot"><div class="when">4限 後半<span class="koma">コマ 8</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>4枚の図を使って、紙芝居形式で発表します。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day3">12/11（金）10:00</span>）。</p>
+    </div></li>
+  </ol>
+
+  <div class="task post">
+    <div class="tag">事後課題 ／ 締切 <span data-due="day3">12/11（金）10:00</span> ／ Classroomのフォーム</div>
+    <ul>
+      <li>2日目の議事録 ×3（グループ）</li>
+      <li>「科学技術と日本の将来」について、<b>3200字以内の作文</b>をWordで書く（個人）。4つのキーワードのうち<b>2つ以上</b>を使うこと。</li>
+    </ul>
+    <div class="hint">これが3日目の事前課題になります。</div>
+  </div>
+</section>
+
+<!-- 3日目 -->
+<section class="day" id="day3">
+  <div class="day-head"><span class="n">3日目</span><span class="date" data-date="day3">2026.12.11（金）</span><span class="goal-line">作文を磨き、4枚のスライドで自分の論を発表する</span></div>
+
+  <div class="task pre">
+    <div class="tag">事前課題 ／ 締切 <span data-due="day3">12/11（金）10:00</span> ／ Classroomのフォーム</div>
+    <ul><li>2日目の事後課題（議事録×3、作文）を、授業日の午前10時までにフォームから提出する。</li></ul>
+  </div>
+
+  <ol class="slots">
+    <li class="slot"><div class="when">3限 前半<span class="koma">コマ 9</span></div><div class="body">
+      <span class="badge">グループ</span>
+      <p>お互いの作文について、グループで改善点を討論する。</p>
+    </div></li>
+    <li class="slot indiv"><div class="when">3限 後半<span class="koma">コマ 10</span></div><div class="body">
+      <span class="badge indiv">個人</span>
+      <p>作文を改善し、<b>4枚のppt</b>で起承転結を表現する。</p>
+    </div></li>
+    <li class="slot indiv"><div class="when">4限 前半<span class="koma">コマ 11</span></div><div class="body">
+      <span class="badge indiv">個人</span>
+      <p>引き続き、作文の改善とppt 4枚の作成。</p>
+    </div></li>
+    <li class="slot indiv"><div class="when">4限 後半<span class="koma">コマ 12</span></div><div class="body">
+      <span class="badge indiv">個人</span>
+      <p>pptをみんなの前で発表する。</p>
+    </div></li>
+  </ol>
+
+  <div class="task post">
+    <div class="tag">事後課題（個人） ／ 締切 2027年1月25日（月）正午 ／ Classroomのフォーム</div>
+    <ul>
+      <li>「科学技術と日本の将来」3200字以内の作文（PDF）</li>
+      <li>「科学技術と日本の将来」を表現したppt資料（PDF）</li>
+      <li>4つのキーワードについてのレポート：<b>各テーマA4で3枚、計12枚</b>をpptで作り、<b>1つのPDFファイル</b>に変換して提出する。
+        <div class="sub">
+          <p>1日目の事後課題と同じく、論文の査読者（レビュアー）への回答を意識して、<b>2日目の発展調査の発表</b>で受けた<b>教員の講評・コメントに答える形</b>で構成してください。</p>
+          <ol>
+            <li><b>講評・コメント</b>：2日目の発展調査の発表で教員から受けた講評やコメントを書く。</li>
+            <li><b>発展事項</b>：それを踏まえて調べたこと・考えたことを書く。どのコメントへの対応なのかが分かるように、番号などで対応付ける。</li>
+          </ol>
+          <p class="hint">pptのスライドサイズはA4に設定してください。構成は<a href="#day1">1日目の事後課題の例</a>を、調べる観点は1日目の事前課題のHint（それは何か／仕組み／これまでの技術に比べた優位性／大学で研究する価値）を参考にしてください。</p>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<section id="fname">
+  <h2>ファイル名を作る <span class="en">File names</span></h2>
+  <p>1日目の事前課題は、決められたファイル名で提出します。学生番号と氏名を入れると、そのまま使えるファイル名が出ます。2回目以降のファイル名は、各回のフォームの指示に従ってください。</p>
+  <div class="fname-tool">
+    <div class="inputs">
+      <label for="sid">学生番号<input id="sid" autocomplete="off" placeholder="例：123456"></label>
+      <label for="sname">氏名<input id="sname" autocomplete="off" placeholder="例：日大太郎"></label>
+    </div>
+    <div class="fn"><span class="what">日本の課題・将来への不安（Word 1枚程度 → PDF）</span><code id="fn1">261127_学生番号_氏名_課題.pdf</code><button type="button" data-copy="fn1">コピー</button></div>
+    <div class="fn"><span class="what">4つのキーワードの調査（ppt 4枚 → 1つのPDF）</span><code id="fn2">261127_学生番号_氏名_調査.pdf</code><button type="button" data-copy="fn2">コピー</button></div>
+  </div>
+</section>
+
+<section id="submit">
+  <h2>成績評価のための提出物 <span class="en">Checklist</span></h2>
+  <p class="final">個人の最終提出物の締切：<span class="mono">2027年1月25日（月）正午</span>（Classroomのフォーム）</p>
+  <p class="note">グループの議事録とpptは、授業期間中に提出したもので評価します。最終提出で出し直す必要はありません。</p>
+  <ul class="checklist">
+    <li><label for="c1"><input type="checkbox" id="c1"><span>議事録（1日目・2日目の各回分、授業期間中に提出）</span><span class="who">グループ</span></label></li>
+    <li><label for="c2"><input type="checkbox" id="c2"><span>ppt 2回分（1日目の調査・発展調査、授業期間中に提出）</span><span class="who">グループ</span></label></li>
+    <li><label for="c3"><input type="checkbox" id="c3"><span>「科学技術と日本の将来」3200字以内の作文（PDF）</span><span class="who">個人</span></label></li>
+    <li><label for="c4"><input type="checkbox" id="c4"><span>「科学技術と日本の将来」を表現するppt（PDF）</span><span class="who">個人</span></label></li>
+    <li><label for="c5"><input type="checkbox" id="c5"><span>4つのキーワードについてのレポート（各テーマA4で3枚、計12枚のppt → 1つのPDF）</span><span class="who">個人</span></label></li>
+    <li><label for="c6"><input type="checkbox" id="c6"><span>（応募した人のみ）コンクールに提出したことを証明できるもの（PDF）</span><span class="who">個人</span></label></li>
+  </ul>
+  <p class="note">グループワークへの貢献度も成績評価の対象です。チェックはこのブラウザにだけ保存される自分用のメモで、提出したことにはなりません。</p>
+</section>
+
+<section id="contest">
+  <h2>論文コンクールに応募する場合 <span class="en">Contest</span></h2>
+  <ul class="rules">
+    <li>締切は<b>2027年1月22日（金）必着</b>。公式サイトのエントリーフォームから事前連絡が必要です。</li>
+    <li>主題は「科学技術と日本の将来」で、<b>副題は自由に付けます</b>。研究成果の報告ではなく、科学技術と社会という広い視点から、自分の主張を論理的に書く論文です。</li>
+    <li>評価の観点は「独創性」「将来性」「論理性」とされています。</li>
+    <li>一人ずつ単独で応募します。連名やグループでの応募はできません。</li>
+    <li>論文は<b>3200字以内</b>（参考文献は字数に含めない）。<b>Wordファイル</b>で提出します。PDFでは応募できません。</li>
+    <li>参考にした書籍やWebサイトは、必ず本文の末尾に記載してください。生成AIの文章をそのまま使うことや、出典を示さない引用はしないでください。</li>
+    <li>応募の前に、必ず<a href="https://www.rikokei.jp/" target="_blank" rel="noopener">公式サイト（rikokei.jp）</a>の募集要項を自分で確認してください。</li>
+  </ul>
+</section>
+
+<footer>
+  <p>担当：野邑・石澤 ／ 30人を15人ずつ2グループに分け、3週間ごとに担当教員が交代します。</p>
+  <div class="links">
+    <a href="https://ishizawa-comblab.ee.cit.nihon-u.ac.jp/" target="_blank" rel="noopener">石澤研究室</a>
+    <a href="https://junianomura.github.io/Nomura-laboratory/" target="_blank" rel="noopener">野邑研究室</a>
+    <a href="../../teaching/">野邑研究室「教育」のページ(担当している講義の一覧)</a>
+  </div>
+</footer>
+</div>
+
+<script>
+// 光周波数コムの「歯」：等間隔の線をガウス包絡で描く
+(function(){
+  var g=document.getElementById('teeth'), ns='http://www.w3.org/2000/svg', n=60, x0=20, dx=(830-20)/(n-1);
+  for(var i=0;i<n;i++){
+    var x=x0+i*dx, t=(i-(n-1)/2)/(n/5), h=6+56*Math.exp(-t*t/2);
+    var l=document.createElementNS(ns,'line');
+    l.setAttribute('x1',x);l.setAttribute('x2',x);l.setAttribute('y1',72);l.setAttribute('y2',72-h);
+    l.setAttribute('class','tooth');l.setAttribute('stroke-width','2');
+    g.appendChild(l);
+  }
+})();
+
+// ===== 授業日の設定：Aグループで使うときは、ここの3つの日付だけ書き換えてください =====
+var SEMINAR_DAYS = { day1:'2026-11-27', day2:'2026-12-04', day3:'2026-12-11' };
+// =========================================================================
+
+var WD='日月火水木金土';
+function dayObj(k){ var p=SEMINAR_DAYS[k].split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
+function wd(d){ return '（'+WD[d.getDay()]+'）'; }
+function pad(n){ return (n<10?'0':'')+n; }
+// 授業日の表示と、締切（授業日の午前10時）の表示
+document.querySelectorAll('[data-date]').forEach(function(el){
+  var d=dayObj(el.getAttribute('data-date')); el.textContent=d.getFullYear()+'.'+pad(d.getMonth()+1)+'.'+pad(d.getDate())+wd(d);
+});
+document.querySelectorAll('[data-due]').forEach(function(el){
+  var d=dayObj(el.getAttribute('data-due')); el.textContent=(d.getMonth()+1)+'/'+d.getDate()+wd(d)+'10:00';
+});
+// ファイル名の先頭（1日目の日付 YYMMDD）
+var FILE_PREFIX=(function(d){ return String(d.getFullYear()).slice(2)+pad(d.getMonth()+1)+pad(d.getDate()); })(dayObj('day1'));
+
+// 次の締切
+(function(){
+  function classDue(k,title){
+    var d=dayObj(k);
+    return {at:SEMINAR_DAYS[k]+'T10:00:00+09:00',title:title,when:d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日'+wd(d)+'午前10時 ／ Classroomのフォームから提出'};
+  }
+  var deadlines=[
+    classDue('day1','1日目 事前課題（課題・調査）'),
+    classDue('day2','2日目 事前課題（議事録×3・発展調査ppt）'),
+    classDue('day3','3日目 事前課題（議事録×3・作文）'),
+    {at:'2027-01-22T23:59:00+09:00',title:'論文コンクール応募（応募する人のみ）',when:'2027年1月22日（金）必着 ／ Wordファイル'},
+    {at:'2027-01-25T12:00:00+09:00',title:'個人の最終提出物',when:'2027年1月25日（月）正午'}
+  ];
+  var now=Date.now(), next=null;
+  for(var i=0;i<deadlines.length;i++){ if(new Date(deadlines[i].at).getTime()>now){next=deadlines[i];break;} }
+  var c=document.getElementById('next-count');
+  if(!next){ document.getElementById('next').hidden=true; return; }
+  var ms=new Date(next.at).getTime()-now, d=Math.floor(ms/86400000), h=Math.floor(ms/3600000);
+  c.innerHTML = d>=1 ? 'あと'+d+'<span>日</span>' : 'あと'+h+'<span>時間</span>';
+  document.getElementById('next-title').textContent=next.title;
+  document.getElementById('next-when').textContent=next.when;
+})();
+
+// ファイル名ジェネレーター
+(function(){
+  var sid=document.getElementById('sid'), sn=document.getElementById('sname');
+  function clean(s){return s.replace(/[\s　]+/g,'').replace(/[\\/:*?"<>|]/g,'');}
+  function upd(){
+    var a=clean(sid.value)||'学生番号', b=clean(sn.value)||'氏名';
+    document.getElementById('fn1').textContent=FILE_PREFIX+'_'+a+'_'+b+'_課題.pdf';
+    document.getElementById('fn2').textContent=FILE_PREFIX+'_'+a+'_'+b+'_調査.pdf';
+  }
+  try{ sid.value=localStorage.getItem('sem-sid')||''; sn.value=localStorage.getItem('sem-name')||''; }catch(e){}
+  upd();
+  [sid,sn].forEach(function(el){ el.addEventListener('input',function(){ upd(); try{localStorage.setItem('sem-sid',sid.value);localStorage.setItem('sem-name',sn.value);}catch(e){} }); });
+  document.querySelectorAll('[data-copy]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var el=document.getElementById(btn.getAttribute('data-copy')), txt=el.textContent;
+      function sel(){ var r=document.createRange(); r.selectNodeContents(el); var s=getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent='選択しました'; }
+      try{ navigator.clipboard.writeText(txt).then(function(){btn.textContent='コピーしました';},sel); }catch(e){ sel(); }
+      setTimeout(function(){btn.textContent='コピー';},1800);
+    });
+  });
+})();
+
+// チェックリスト（このブラウザだけに保存）
+(function(){
+  document.querySelectorAll('.checklist input').forEach(function(cb){
+    try{ cb.checked=localStorage.getItem('sem-'+cb.id)==='1'; }catch(e){}
+    cb.addEventListener('change',function(){ try{localStorage.setItem('sem-'+cb.id,cb.checked?'1':'0');}catch(e){} });
+  });
+})();
+</script>
+</body>
+</html>

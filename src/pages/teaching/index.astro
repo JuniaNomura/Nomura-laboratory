@@ -4,34 +4,37 @@ import { getCollection } from "astro:content";
 import { withBase } from "../../utils/url";
 import { isVisible } from "../../utils/visibility";
 import { kindLabels, materialLabels, materialHref, fileFormat } from "../../utils/teaching";
+import { visitorsPublished } from "../../config/site";
 
-const entries = (await getCollection("teaching", ({ data }) => isVisible(data))).sort(
-  (a, b) => a.data.order - b.data.order,
-);
+// このページには学内の講義だけを出す。学外講義(kind: outreach)は「学外の方へ」のページに出す
+const entries = (
+  await getCollection("teaching", ({ data }) => isVisible(data) && data.kind === "course")
+).sort((a, b) => a.data.order - b.data.order);
 
-const groups = [
+const sections = [
   {
-    kind: "course",
-    lead: "日本大学 生産工学部で担当した講義です。講義ノート・スライド・試験問題を、公開できる範囲で載せています。",
+    title: kindLabels.course,
+    lead: "日本大学 生産工学部で担当している講義です。講義ノート・スライド・試験問題を、公開できる範囲で載せています。",
+    items: entries,
   },
-  {
-    kind: "outreach",
-    lead: "高校や公開講座など、学外で行った講義・講演です。",
-  },
-] as const;
-const sections = groups
-  .map((g) => ({ ...g, title: kindLabels[g.kind], items: entries.filter((e) => e.data.kind === g.kind) }))
-  .filter((g) => g.items.length > 0);
+].filter((g) => g.items.length > 0);
 ---
 
 <BaseLayout
-  title="教育・アウトリーチ"
-  description="担当した講義や学外講義と、その資料(講義ノート・スライド・試験問題)を公開しています。"
+  title="教育"
+  description="担当している講義と、その資料(講義ノート・スライド・試験問題)を公開しています。"
 >
-  <h1>教育・アウトリーチ</h1>
+  <h1>教育</h1>
   <p class="page-lead">
-    担当した講義や、学外で行った講義の資料を公開しています。復習や、研究室の分野がどんな基礎の上に成り立っているかを知る手がかりに使ってください。
+    担当している講義の資料を公開しています。復習や、研究室の分野がどんな基礎の上に成り立っているかを知る手がかりに使ってください。
   </p>
+  {
+    (import.meta.env.DEV || visitorsPublished) && (
+      <p>
+        高校などで行った学外の講義や、高大連携については、<a href={withBase("/visitors/#schools")}>学外の方へ</a>のページで紹介しています。
+      </p>
+    )
+  }
 
   {
     sections.length === 0 ? (

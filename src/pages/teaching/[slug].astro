@@ -59,5 +59,9 @@ const rows = [
       </section>
     )}
   </article>
-  <p><a href={withBase("/teaching/")}>← 教育・アウトリーチに戻る</a></p>
+  {entry.data.kind === "outreach" ? (
+    <p><a href={withBase("/visitors/#schools")}>← 学外の方へに戻る</a></p>
+  ) : (
+    <p><a href={withBase("/teaching/")}>← 教育に戻る</a></p>
+  )}
 </BaseLayout>

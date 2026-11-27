@@ -186,6 +186,52 @@ collections:
                 widget: select
                 required: false
                 options: ["システムエンジニア", "研究開発", "設計・開発", "生産技術", "品質保証", "営業・技術営業", "その他"]
+      - label: "学外の方へ"
+        name: visitors
+        file: "src/data/visitors.yaml"
+        fields:
+          - { label: "公開する(オフの間は『準備中』と表示し、メニューにも出さない)", name: published, widget: boolean, default: false }
+          - { label: "導入文", name: lead, widget: text, required: false }
+          - label: "立場ごとの案内"
+            name: sections
+            widget: list
+            fields:
+              - { label: "ページ内リンクの名前(universities, companies, schools, public。変えないでください)", name: id, widget: string }
+              - { label: "見出し", name: title, widget: string }
+              - { label: "説明", name: lead, widget: text, required: false }
+              - { label: "これまでの活動(1行に1項目)", name: record, widget: list, required: false }
+              - { label: "お受けできること(1行に1項目。**で囲むと太字)", name: welcome, widget: list, required: false }
+              - { label: "ご遠慮いただいていることの前置き", name: declineLead, widget: text, required: false }
+              - { label: "ご遠慮いただいていること(1行に1項目)", name: decline, widget: list, required: false }
+              - label: "研究費用の目安(企業の方へ で使用)"
+                name: fees
+                widget: object
+                required: false
+                fields:
+                  - { label: "見出し", name: title, widget: string, required: false }
+                  - label: "区分"
+                    name: groups
+                    widget: list
+                    fields:
+                      - { label: "区分の名前(例: 共同研究)", name: title, widget: string }
+                      - { label: "補足(例: 期間は2年以上が望ましい)", name: note, widget: string, required: false }
+                      - label: "費用"
+                        name: rows
+                        widget: list
+                        fields:
+                          - { label: "費用(例: 150万円/年 以上)", name: price, widget: string }
+                          - { label: "内容", name: content, widget: string }
+                      - { label: "含まれるもの(1行に1項目)", name: includes, widget: list, required: false }
+                  - { label: "注記(1行に1項目)", name: notes, widget: list, required: false }
+              - { label: "補足", name: note, widget: text, required: false }
+              - label: "関連するページ"
+                name: links
+                widget: list
+                required: false
+                fields:
+                  - { label: "表示名", name: label, widget: string }
+                  - { label: "リンク先(サイト内は / から、外部は https:// から)", name: href, widget: string }
+          - { label: "連絡先の前置き", name: contactLead, widget: text, required: false }
       - label: "研究内容ページの見出し・導入文"
         name: research
         file: "src/data/research.yaml"
@@ -380,7 +426,7 @@ collections:
       - { label: "本文", name: body, widget: markdown }
 
   - name: teaching
-    label: "教育・アウトリーチ"
+    label: "講義(教育・学外講義)"
     label_singular: "講義"
     folder: "src/content/teaching"
     create: true
@@ -396,8 +442,8 @@ collections:
         widget: select
         default: course
         options:
-          - { label: "学内の講義", value: course }
-          - { label: "学外講義・出前授業", value: outreach }
+          - { label: "学内の講義(「教育」のページに出る)", value: course }
+          - { label: "学外講義・出前授業(「学外の方へ」のページに出る)", value: outreach }
       - { label: "時期 (例: 2025年度 前期, 2025年8月)", name: period, widget: string, required: false }
       - { label: "対象 (例: 学部2年, 高校生, 一般)", name: audience, widget: string, required: false }
       - { label: "開催先(学外講義のみ)", name: place, widget: string, required: false }

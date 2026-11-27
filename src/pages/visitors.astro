@@ -1,0 +1,261 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+import { siteConfig } from "../config/site";
+import { withBase } from "../utils/url";
+import { loadYaml } from "../utils/data";
+import { isEmail, isHttpUrl } from "../utils/contact";
+import { isVisible } from "../utils/visibility";
+
+interface VisitorSection {
+  id: string;
+  title: string;
+  lead?: string;
+  welcome?: string[];
+  record?: string[];
+  decline?: string[];
+  declineLead?: string;
+  note?: string;
+  links?: { label: string; href: string }[];
+  fees?: {
+    title?: string;
+    groups?: {
+      title: string;
+      note?: string;
+      rows?: { price: string; content: string }[];
+      includes?: string[];
+    }[];
+    notes?: string[];
+  };
+}
+interface VisitorsData {
+  published?: boolean;
+  lead?: string;
+  sections?: VisitorSection[];
+  contactLead?: string;
+}
+
+const data = loadYaml<VisitorsData>("src/data/visitors.yaml", {});
+// 公開用のビルドでは、published: true になるまで「準備中」だけを表示する。
+const showContent = import.meta.env.DEV || data.published === true;
+const sections = (data.sections ?? []).filter((s) => s.id && s.title);
+
+// 文中の **太字** だけを <strong> にする(それ以外のHTMLは文字として表示する)
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const inline = (s: string) => escapeHtml(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+// サイト内のリンクにはベースパスを付け、外部リンクは新しいタブで開く
+const linkOf = (href: string) =>
+  isHttpUrl(href) ? { href, target: "_blank", rel: "noopener noreferrer" } : { href: withBase(href) };
+
+// 学外講義(講義の資料で、種類が「学外講義・出前授業」のもの)は、先生方向けの欄に出す
+const outreach = (
+  await getCollection("teaching", ({ data }) => isVisible(data) && data.kind === "outreach")
+).sort((a, b) => a.data.order - b.data.order);
+---
+
+<BaseLayout
+  title="学外の方へ"
+  description="大学・企業の方、小学校・中学校・高等学校の先生方、一般の方に向けて、研究室としてお受けできることをまとめています。"
+>
+  <h1>学外の方へ</h1>
+
+  {
+    !showContent ? (
+      <p>このページは現在準備中です。</p>
+    ) : (
+      <>
+        {import.meta.env.DEV && data.published !== true && (
+          <p class="notice">
+            プレビュー表示です。src/data/visitors.yaml の published が false のため、公開サイトでは「準備中」と表示され、メニューにも出ません。
+          </p>
+        )}
+        {data.lead && <p class="page-lead">{data.lead}</p>}
+
+        <nav aria-label="このページの内容">
+          <ul class="page-toc">
+            {sections.map((s) => (
+              <li>
+                <a href={`#${s.id}`}>{s.title}</a>
+              </li>
+            ))}
+            <li>
+              <a href="#contact">ご連絡先</a>
+            </li>
+          </ul>
+        </nav>
+
+        {sections.map((s) => (
+          <section id={s.id} class="visitors-section">
+            <h2>{s.title}</h2>
+            {s.lead && <p>{s.lead}</p>}
+
+            {s.record && s.record.length > 0 && (
+              <>
+                <h3>これまでの活動</h3>
+                <ul>
+                  {s.record.map((item) => (
+                    <li set:html={inline(item)} />
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {s.welcome && s.welcome.length > 0 && (
+              <>
+                <h3>お受けできること</h3>
+                <ul>
+                  {s.welcome.map((item) => (
+                    <li set:html={inline(item)} />
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {s.id === "schools" && outreach.length > 0 && (
+              <>
+                <h3>これまでの学外講義</h3>
+                <ul>
+                  {outreach.map((entry) => (
+                    <li>
+                      <a href={withBase(`/teaching/${entry.id}/`)}>{entry.data.title}</a>
+                      {[entry.data.period, entry.data.place].filter(Boolean).length > 0 && (
+                        <span class="teaching-meta">
+                          ({[entry.data.period, entry.data.place].filter(Boolean).join("、")})
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {s.fees && (s.fees.groups ?? []).length > 0 && (
+              <div class="visitors-fees">
+                <h3>{s.fees.title ?? "研究費用の目安"}</h3>
+                {(s.fees.groups ?? []).map((g) => (
+                  <>
+                    <h4>{g.title}</h4>
+                    {g.note && <p>{g.note}</p>}
+                    {g.rows && g.rows.length > 0 && (
+                      <table class="fee-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">費用</th>
+                            <th scope="col">内容</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {g.rows.map((r) => (
+                            <tr>
+                              <td class="fee-table__price">{r.price}</td>
+                              <td>{r.content}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {g.includes && g.includes.length > 0 && (
+                      <p class="fee-includes">
+                        含まれるもの: {g.includes.join("、")}
+                      </p>
+                    )}
+                  </>
+                ))}
+                {s.fees.notes && s.fees.notes.length > 0 && (
+                  <ul class="stat-note">
+                    {s.fees.notes.map((n) => (
+                      <li set:html={inline(n)} />
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {s.decline && s.decline.length > 0 && (
+              <div class="visitors-decline">
+                <h3>ご遠慮いただいていること</h3>
+                {s.declineLead && <p>{s.declineLead}</p>}
+                <ul>
+                  {s.decline.map((item) => (
+                    <li set:html={inline(item)} />
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {s.note && <p set:html={inline(s.note)} />}
+
+            {s.links && s.links.length > 0 && (
+              <>
+                <h3>関連するページ</h3>
+                <ul>
+                  {s.links.map((l) => (
+                    <li>
+                      <a {...linkOf(l.href)}>{l.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+        ))}
+
+        <section id="contact">
+          <h2>ご連絡先</h2>
+          {data.contactLead && <p>{data.contactLead}</p>}
+          <p>
+            {isEmail(siteConfig.contactEmail) ? (
+              <a href={`mailto:${siteConfig.contactEmail}`}>{siteConfig.contactEmail}</a>
+            ) : (
+              siteConfig.contactEmail
+            )}
+          </p>
+        </section>
+      </>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .visitors-section h3 {
+    margin-top: 1.5em;
+  }
+  .visitors-decline {
+    margin-top: 1.5em;
+    padding: 0.25em 1em 0.5em;
+    border-left: 4px solid var(--color-border);
+    background: #f7f7f7;
+  }
+  .visitors-decline h3 {
+    margin-top: 0.75em;
+  }
+  .visitors-fees h4 {
+    margin: 1.25em 0 0.25em;
+  }
+  .fee-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.5rem 0 0.75rem;
+    font-size: 0.95rem;
+  }
+  .fee-table th,
+  .fee-table td {
+    border: 1px solid var(--color-border);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .fee-table th {
+    background: var(--color-accent-bg);
+  }
+  .fee-table__price {
+    width: 11em;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .fee-includes {
+    margin-top: 0;
+  }
+</style>
