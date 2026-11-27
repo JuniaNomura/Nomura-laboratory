@@ -102,6 +102,8 @@ h1 small{display:block;font-size:.5em;font-weight:700;color:var(--muted);margin-
 .badge.indiv{background:var(--indiv-soft);color:var(--indiv)}
 .hw{font-size:.92rem;background:var(--warn-soft);border-radius:6px;padding:8px 12px}
 .hw b{color:var(--warn)}
+.hw:has(+ .hw-list){border-bottom-left-radius:0;border-bottom-right-radius:0}
+.hw-list{margin:-8px 0 0;padding:0 12px 10px 2.2em;background:var(--warn-soft);border-radius:0 0 6px 6px;font-size:.92rem;display:flex;flex-direction:column;gap:2px}
 .hint{font-size:.92rem;color:var(--muted)}
 
 /* ファイル名 */
@@ -248,7 +250,11 @@ footer{font-size:.85rem;color:var(--muted);border-top:1px solid var(--line);padd
       <span class="badge">グループ</span>
       <p>日本の課題や将来への不安、「もっとこうなったらいいな」と思うことを自由に共有しあう。</p>
       <p class="hint">Hint：<a href="https://www.rikokei.jp/" target="_blank" rel="noopener">論文コンクール公式サイト</a>の「論文作成のコツ」を参考にするとよいでしょう。</p>
-      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。<br>議事録には次の内容を含めてください。</p>
+      <ul class="hw-list">
+        <li>グループで出た案と、それぞれの案に対してどのような意見が出たか</li>
+        <li>いくつかの案の中から最後にどの案を選んだか、その理由</li>
+      </ul>
     </div></li>
     <li class="slot"><div class="when">3限 後半<span class="koma">コマ 2</span></div><div class="body">
       <span class="badge">グループ</span>
@@ -257,12 +263,19 @@ footer{font-size:.85rem;color:var(--muted);border-top:1px solid var(--line);padd
     <li class="slot"><div class="when">4限 前半<span class="koma">コマ 3</span></div><div class="body">
       <span class="badge">グループ</span>
       <p>4つの技術を使って、みんなが挙げた課題や将来への不安を解決できないか議論する。</p>
-      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。<br>議事録には次の内容を含めてください。</p>
+      <ul class="hw-list">
+        <li>グループで話し合った具体的な内容（発表に使わなかった分も含めて）</li>
+      </ul>
     </div></li>
     <li class="slot"><div class="when">4限 後半<span class="koma">コマ 4</span></div><div class="body">
       <span class="badge">グループ</span>
       <p>議論から<b>課題と解決方法を1つ</b>選び、ホワイトボードに描いた<b>4枚の図で起承転結</b>を表現。紙芝居形式で発表します。</p>
-      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。</p>
+      <p class="hw"><b>宿題</b> グループごとに議事録（Word→PDF）を提出。締切は次回の事前課題と同じ（<span data-due="day2">12/4（金）10:00</span>）。<br>議事録には次の内容を含めてください。</p>
+      <ul class="hw-list">
+        <li>発表に対して、周りのグループ・教員・先輩から出たコメント</li>
+        <li>改善点や質問への、自分たちなりの回答</li>
+      </ul>
     </div></li>
   </ol>
 
@@ -270,9 +283,9 @@ footer{font-size:.85rem;color:var(--muted);border-top:1px solid var(--line);padd
     <div class="tag">事後課題 ／ 締切 <span data-due="day2">12/4（金）10:00</span> ／ Classroomのフォーム</div>
     <ul>
       <li>1日目の議事録 ×3（グループ）</li>
-      <li><b>新しいグループ</b>で、4つのキーワードについて発展的な内容を調べ、<b>各テーマ2枚、計8枚</b>のpptにまとめ、<b>1つのPDFファイル</b>に変換して提出する。
+      <li><b>個人</b>で、4つのキーワードについて発展的な内容を調べ、<b>各テーマ2枚、計8枚</b>のpptにまとめ、<b>1つのPDFファイル</b>に変換して提出する。
         <div class="sub">
-          <p>論文の査読者（レビュアー）への回答を意識して、1日目の発表で受けた<b>教員の講評・コメントに答える形</b>で構成してください。各メンバーが前のグループで受けたコメントを持ち寄りましょう。</p>
+          <p>論文の査読者（レビュアー）への回答を意識して、1日目の発表で自分のグループが受けた<b>教員の講評・コメントに答える形</b>で構成してください。</p>
           <ol>
             <li><b>講評・コメント</b>：1日目の発表で教員から受けた講評やコメントを書く。</li>
             <li><b>発展事項</b>：それを踏まえて調べたこと・考えたことを書く。どのコメントへの対応なのかが分かるように、番号などで対応付ける。</li>
@@ -292,7 +305,7 @@ footer{font-size:.85rem;color:var(--muted);border-top:1px solid var(--line);padd
 
 <!-- 2日目 -->
 <section class="day" id="day2">
-  <div class="day-head"><span class="n">2日目</span><span class="date" data-date="day2">2026.12.04（金）</span><span class="goal-line">新しいグループで発展調査を共有し、もう一度解決策を組み立てる</span></div>
+  <div class="day-head"><span class="n">2日目</span><span class="date" data-date="day2">2026.12.04（金）</span><span class="goal-line">各自の発展調査を共有し、もう一度解決策を組み立てる</span></div>
 
   <div class="task pre">
     <div class="tag">事前課題 ／ 締切 <span data-due="day2">12/4（金）10:00</span> ／ Classroomのフォーム</div>
@@ -395,10 +408,10 @@ footer{font-size:.85rem;color:var(--muted);border-top:1px solid var(--line);padd
 <section id="submit">
   <h2>成績評価のための提出物 <span class="en">Checklist</span></h2>
   <p class="final">個人の最終提出物の締切：<span class="mono">2027年1月25日（月）正午</span>（Classroomのフォーム）</p>
-  <p class="note">グループの議事録とpptは、授業期間中に提出したもので評価します。最終提出で出し直す必要はありません。</p>
+  <p class="note">議事録と、1日目の調査・発展調査のpptは、授業期間中に提出したもので評価します。最終提出で出し直す必要はありません。</p>
   <ul class="checklist">
     <li><label for="c1"><input type="checkbox" id="c1"><span>議事録（1日目・2日目の各回分、授業期間中に提出）</span><span class="who">グループ</span></label></li>
-    <li><label for="c2"><input type="checkbox" id="c2"><span>ppt 2回分（1日目の調査・発展調査、授業期間中に提出）</span><span class="who">グループ</span></label></li>
+    <li><label for="c2"><input type="checkbox" id="c2"><span>ppt 2回分（1日目の調査・発展調査、授業期間中に提出）</span><span class="who">個人</span></label></li>
     <li><label for="c3"><input type="checkbox" id="c3"><span>「科学技術と日本の将来」3200字以内の作文（PDF）</span><span class="who">個人</span></label></li>
     <li><label for="c4"><input type="checkbox" id="c4"><span>「科学技術と日本の将来」を表現するppt（PDF）</span><span class="who">個人</span></label></li>
     <li><label for="c5"><input type="checkbox" id="c5"><span>4つのキーワードについてのレポート（各テーマA4で3枚、計12枚のppt → 1つのPDF）</span><span class="who">個人</span></label></li>
